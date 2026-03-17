@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AlphaConvert — Admin</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'Plus Jakarta Sans',sans-serif; background:#0f0f1a; color:#e5e7eb; height:100vh; display:flex; flex-direction:column; }
+
+/* LOGIN */
+#loginScreen { position:fixed; inset:0; background:#0f0f1a; display:flex; align-items:center; justify-content:center; z-index:999; }
+.login-box { background:#1a1a2e; border:1.5px solid #2a2a3e; border-radius:16px; padding:2.5rem; width:100%; max-width:380px; text-align:center; }
+.login-box h2 { font-size:1.3rem; font-weight:800; margin-bottom:0.4rem; }
+.login-box p { color:#6b7280; font-size:0.85rem; margin-bottom:1.5rem; }
+.login-input { width:100%; background:#0f0f1a; border:1.5px solid #2a2a3e; border-radius:10px; padding:0.8rem 1rem; font-size:0.9rem; font-family:inherit; color:#e5e7eb; outline:none; margin-bottom:1rem; }
+.login-input:focus { border-color:#4f46e5; }
+.login-btn { width:100%; padding:0.9rem; background:#4f46e5; color:#fff; border:none; border-radius:10px; font-size:0.95rem; font-weight:700; cursor:pointer; font-family:inherit; }
+.login-btn:hover { background:#4338ca; }
+.login-error { color:#f87171; font-size:0.82rem; margin-top:0.5rem; display:none; }
+
+/* LAYOUT */
+.app { display:flex; height:100vh; }
+
+/* SIDEBAR */
+.sidebar { width:300px; background:#1a1a2e; border-right:1px solid #2a2a3e; display:flex; flex-direction:column; flex-shrink:0; }
+.sidebar-header { padding:1rem 1.2rem; border-bottom:1px solid #2a2a3e; display:flex; align-items:center; justify-content:space-between; }
+.sidebar-title { font-weight:800; font-size:0.95rem; }
+.notif-badge { background:#ef4444; color:#fff; font-size:0.7rem; font-weight:700; padding:0.15rem 0.5rem; border-radius:100px; }
+.sessions-list { flex:1; overflow-y:auto; }
+.session-item { padding:1rem 1.2rem; border-bottom:1px solid #2a2a3e; cursor:pointer; transition:background 0.15s; }
+.session-item:hover { background:#252538; }
+.session-item.active { background:#252538; border-left:3px solid #4f46e5; }
+.session-item.unread { border-left:3px solid #ef4444; }
+.session-name { font-weight:700; font-size:0.88rem; margin-bottom:0.2rem; display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap; }
+.session-plan { background:#ede9fe; color:#4f46e5; font-size:0.7rem; font-weight:700; padding:0.1rem 0.5rem; border-radius:4px; }
+.session-preview { font-size:0.78rem; color:#6b7280; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.session-time { font-size:0.7rem; color:#4b5563; margin-top:0.2rem; }
+.unread-dot { width:8px; height:8px; border-radius:50%; background:#ef4444; flex-shrink:0; }
+.empty-sessions { padding:2rem; text-align:center; color:#4b5563; font-size:0.85rem; }
+
+/* MAIN CHAT */
+.main { flex:1; display:flex; flex-direction:column; overflow:hidden; }
+.main-empty { flex:1; display:flex; align-items:center; justify-content:center; color:#4b5563; font-size:0.9rem; text-align:center; }
+.chat-header { padding:1rem 1.5rem; border-bottom:1px solid #2a2a3e; background:#1a1a2e; display:flex; align-items:center; gap:0.8rem; flex-wrap:wrap; }
+.client-avatar { width:38px; height:38px; border-radius:10px; background:linear-gradient(135deg,#6b7280,#374151); display:flex; align-items:center; justify-content:center; font-size:1.1rem; flex-shrink:0; }
+.client-name { font-weight:700; font-size:0.95rem; }
+.client-plan { font-size:0.78rem; color:#9ca3af; }
+.expiry-info { font-size:0.72rem; color:#6ee7b7; margin-top:0.1rem; }
+.status-badge { margin-left:auto; display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap; }
+.badge { font-size:0.72rem; font-weight:700; padding:0.25rem 0.7rem; border-radius:100px; }
+.badge-waiting { background:#fef3c7; color:#92400e; }
+.badge-active { background:#dcfce7; color:#166534; }
+.activate-btn { background:#10b981; color:#fff; border:none; border-radius:8px; padding:0.4rem 0.9rem; font-size:0.78rem; font-weight:700; cursor:pointer; font-family:inherit; transition:background 0.2s; }
+.activate-btn:hover { background:#059669; }
+.remove-btn { background:#ef4444; color:#fff; border:none; border-radius:8px; padding:0.4rem 0.9rem; font-size:0.78rem; font-weight:700; cursor:pointer; font-family:inherit; transition:background 0.2s; }
+.remove-btn:hover { background:#dc2626; }
+.chat-messages { flex:1; overflow-y:auto; padding:1.2rem; display:flex; flex-direction:column; gap:0.8rem; }
+.msg { display:flex; gap:0.6rem; align-items:flex-end; max-width:75%; }
+.msg.client { align-self:flex-start; }
+.msg.admin { align-self:flex-end; flex-direction:row-reverse; }
+.msg-avatar { width:28px; height:28px; border-radius:8px; display:flex; align-items:center; justify-content:center; color:#fff; font-size:0.75rem; flex-shrink:0; }
+.client-av { background:linear-gradient(135deg,#6b7280,#374151); }
+.admin-av { background:linear-gradient(135deg,#4f46e5,#7c3aed); }
+.msg-bubble { padding:0.7rem 0.9rem; border-radius:12px; font-size:0.875rem; line-height:1.5; }
+.msg.client .msg-bubble { background:#252538; color:#e5e7eb; border-bottom-left-radius:4px; }
+.msg.admin .msg-bubble { background:#4f46e5; color:#fff; border-bottom-right-radius:4px; }
+.msg-time { font-size:0.7rem; color:#4b5563; margin-top:3px; }
+.msg.admin .msg-time { text-align:right; }
+.input-area { padding:1rem 1.2rem; border-top:1px solid #2a2a3e; background:#1a1a2e; display:flex; gap:0.6rem; }
+.admin-input { flex:1; background:#0f0f1a; border:1.5px solid #2a2a3e; border-radius:10px; padding:0.7rem 1rem; font-size:0.88rem; font-family:inherit; color:#e5e7eb; outline:none; resize:none; }
+.admin-input:focus { border-color:#4f46e5; }
+.send-btn { background:#4f46e5; color:#fff; border:none; border-radius:10px; padding:0.7rem 1.2rem; cursor:pointer; font-size:0.85rem; font-weight:700; font-family:inherit; white-space:nowrap; }
+.quick-btns { padding:0.5rem 1.2rem 0; display:flex; gap:0.5rem; flex-wrap:wrap; }
+.qb { background:#252538; border:1px solid #2a2a3e; color:#9ca3af; font-size:0.75rem; font-weight:600; padding:0.3rem 0.7rem; border-radius:6px; cursor:pointer; font-family:inherit; transition:all 0.15s; }
+.qb:hover { border-color:#4f46e5; color:#a5b4fc; }
+
+/* MODAL */
+.modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.75); display:flex; align-items:center; justify-content:center; z-index:1000; }
+.modal-box { background:#1a1a2e; border:1.5px solid #2a2a3e; border-radius:16px; padding:2rem; width:100%; max-width:420px; }
+.modal-box h3 { font-size:1.1rem; font-weight:800; margin-bottom:0.4rem; }
+.modal-box p { color:#6b7280; font-size:0.85rem; margin-bottom:1.5rem; }
+.plan-options { display:grid; grid-template-columns:1fr 1fr; gap:0.8rem; margin-bottom:1.5rem; }
+.plan-option { background:#0f0f1a; border:2px solid #2a2a3e; border-radius:12px; padding:1rem; cursor:pointer; text-align:center; transition:all 0.15s; }
+.plan-option:hover { border-color:#4f46e5; }
+.plan-option.selected { border-color:#10b981; background:#052e16; }
+.plan-dur { font-weight:800; font-size:1rem; margin-bottom:0.3rem; }
+.plan-exp { font-size:0.7rem; color:#6b7280; }
+.plan-option.selected .plan-exp { color:#6ee7b7; }
+.modal-actions { display:flex; gap:0.8rem; }
+.modal-confirm { flex:1; padding:0.8rem; background:#10b981; color:#fff; border:none; border-radius:10px; font-size:0.9rem; font-weight:700; cursor:pointer; font-family:inherit; }
+.modal-confirm:hover { background:#059669; }
+.modal-confirm:disabled { background:#374151; cursor:not-allowed; }
+.modal-cancel { padding:0.8rem 1.2rem; background:#252538; color:#9ca3af; border:none; border-radius:10px; font-size:0.9rem; font-weight:700; cursor:pointer; font-family:inherit; }
+.modal-cancel:hover { background:#2a2a3e; }
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="loginScreen">
+  <div class="login-box">
+    <h2>👑 Admin AlphaConvert</h2>
+    <p>Panneau de gestion Premium</p>
+    <input class="login-input" type="password" id="adminPassword" placeholder="Mot de passe admin">
+    <button class="login-btn" onclick="login()">Se connecter</button>
+    <div class="login-error" id="loginError">Mot de passe incorrect</div>
+  </div>
+</div>
+
+<!-- MODAL ACTIVATION -->
+<div class="modal-overlay" id="activateModal" style="display:none;">
+  <div class="modal-box">
+    <h3>⚡ Activer le Premium</h3>
+    <p>Choisis la durée réelle du plan pour ce client :</p>
+    <div class="plan-options">
+      <div class="plan-option" onclick="selectPlan(this,1)" id="opt-1">
+        <div class="plan-dur">1 Mois</div>
+        <div class="plan-exp" id="exp-1">—</div>
+      </div>
+      <div class="plan-option" onclick="selectPlan(this,3)" id="opt-3">
+        <div class="plan-dur">3 Mois</div>
+        <div class="plan-exp" id="exp-3">—</div>
+      </div>
+      <div class="plan-option" onclick="selectPlan(this,6)" id="opt-6">
+        <div class="plan-dur">6 Mois</div>
+        <div class="plan-exp" id="exp-6">—</div>
+      </div>
+      <div class="plan-option" onclick="selectPlan(this,12)" id="opt-12">
+        <div class="plan-dur">1 An</div>
+        <div class="plan-exp" id="exp-12">—</div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="modal-cancel" onclick="closeModal()">Annuler</button>
+      <button class="modal-confirm" id="confirmBtn" onclick="confirmActivation()" disabled>✅ Confirmer</button>
+    </div>
+  </div>
+</div>
+
+<!-- APP -->
+<div class="app" id="app" style="display:none;">
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <span class="sidebar-title">💬 Demandes Premium</span>
+      <span class="notif-badge" id="notifBadge" style="display:none">0</span>
+    </div>
+    <div class="sessions-list" id="sessionsList">
+      <div class="empty-sessions">Aucune demande pour l'instant</div>
+    </div>
+    <!-- GENERATEUR DE CODES -->
+    <div style="padding:1rem 1.2rem; border-top:1px solid #2a2a3e;">
+      <div style="font-size:0.78rem; font-weight:700; color:#9ca3af; margin-bottom:0.7rem;">🔑 GÉNÉRER UN CODE PREMIUM</div>
+      <select id="codeDuration" style="width:100%; background:#0f0f1a; border:1.5px solid #2a2a3e; border-radius:8px; padding:0.5rem 0.7rem; font-size:0.82rem; font-family:inherit; color:#e5e7eb; outline:none; margin-bottom:0.6rem;">
+        <option value="1">1 Mois</option>
+        <option value="3">3 Mois</option>
+        <option value="6">6 Mois</option>
+        <option value="12">1 An</option>
+      </select>
+      <button onclick="generateCode()" style="width:100%; padding:0.6rem; background:#f59e0b; color:#000; border:none; border-radius:8px; font-size:0.82rem; font-weight:700; cursor:pointer; font-family:inherit;">⚡ Générer le code</button>
+      <div id="generatedCode" style="display:none; margin-top:0.8rem; background:#0f0f1a; border:1.5px solid #f59e0b; border-radius:8px; padding:0.7rem; text-align:center;">
+        <div style="font-size:0.7rem; color:#9ca3af; margin-bottom:0.3rem;">Code généré — copie et envoie au client :</div>
+        <div id="codeValue" style="font-size:0.95rem; font-weight:800; color:#f59e0b; letter-spacing:2px; cursor:pointer;" onclick="copyCode()" title="Cliquer pour copier"></div>
+        <div id="codeExpiry" style="font-size:0.7rem; color:#6b7280; margin-top:0.3rem;"></div>
+        <div id="copyMsg" style="font-size:0.7rem; color:#10b981; margin-top:0.2rem; display:none;">✅ Copié !</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="main-empty" id="mainEmpty">
+      <div>
+        <div style="font-size:3rem;margin-bottom:1rem">💬</div>
+        <div>Sélectionne une conversation</div>
+      </div>
+    </div>
+    <div id="chatArea" style="display:none; flex-direction:column; flex:1; overflow:hidden;">
+      <div class="chat-header" id="chatHeader"></div>
+      <div class="quick-btns" id="quickBtns"></div>
+      <div class="chat-messages" id="chatMessages"></div>
+      <div class="input-area">
+        <textarea class="admin-input" id="adminInput" rows="2" placeholder="Répondre…"></textarea>
+        <button class="send-btn" onclick="sendReply()">Envoyer</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, collection, addDoc, onSnapshot, query, orderBy,
+         serverTimestamp, doc, setDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBJgtQp4ZrOPuUhmwiQw6FmOvt7nywudOc",
+  authDomain: "alphaconvert-d6d65.firebaseapp.com",
+  projectId: "alphaconvert-d6d65",
+  storageBucket: "alphaconvert-d6d65.firebasestorage.app",
+  messagingSenderId: "599445275974",
+  appId: "1:599445275974:web:9c19afd3c4f8219e3f9147"
+};
+
+const ADMIN_PASSWORD = 'alphaadmin2026'; // ← change ici
+
+const fbApp = initializeApp(firebaseConfig);
+const db = getFirestore(fbApp);
+
+let currentSession = null;
+let msgUnsub = null;
+let sessions = {};
+let selectedMonths = null;
+
+// ── LOGIN ──────────────────────────────────────────────────────
+window.login = function() {
+  const pw = document.getElementById('adminPassword').value;
+  if (pw === ADMIN_PASSWORD) {
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('app').style.display = 'flex';
+    startListening();
+  } else {
+    document.getElementById('loginError').style.display = 'block';
+  }
+};
+document.getElementById('adminPassword').addEventListener('keydown', e => {
+  if (e.key === 'Enter') window.login();
+});
+
+// ── FIRESTORE ─────────────────────────────────────────────────
+function startListening() {
+  onSnapshot(collection(db, 'sessions'), snapshot => {
+    snapshot.docChanges().forEach(ch => {
+      sessions[ch.doc.id] = { id: ch.doc.id, ...ch.doc.data() };
+    });
+    renderSessions();
+    const unread = Object.values(sessions).filter(s => s.hasNewMessage).length;
+    const badge = document.getElementById('notifBadge');
+    badge.style.display = unread > 0 ? 'inline' : 'none';
+    badge.textContent = unread;
+    document.title = unread > 0 ? `(${unread}) Admin — AlphaConvert` : 'Admin — AlphaConvert';
+  });
+}
+
+// ── SIDEBAR ───────────────────────────────────────────────────
+function renderSessions() {
+  const list = document.getElementById('sessionsList');
+  const sorted = Object.values(sessions).sort((a, b) => {
+    if (a.hasNewMessage && !b.hasNewMessage) return -1;
+    if (!a.hasNewMessage && b.hasNewMessage) return 1;
+    return 0;
+  });
+  if (!sorted.length) {
+    list.innerHTML = '<div class="empty-sessions">Aucune demande pour l\'instant</div>';
+    return;
+  }
+  list.innerHTML = sorted.map(s => {
+    let sub = '⏳ En attente';
+    if (s.status === 'active' && s.expiresAt) {
+      sub = `✅ Expire le ${new Date(s.expiresAt).toLocaleDateString('fr')}`;
+    }
+    return `<div class="session-item ${s.id===currentSession?'active':''} ${s.hasNewMessage?'unread':''}" onclick="openSession('${s.id}')">
+      <div class="session-name">👤 Client <span class="session-plan">${s.plan||'?'} — ${s.amount||'?'}</span>${s.hasNewMessage?'<span class="unread-dot"></span>':''}</div>
+      <div class="session-preview">${s.lastMessage||'Nouvelle demande'}</div>
+      <div class="session-time">${sub}</div>
+    </div>`;
+  }).join('');
+}
+
+// ── OPEN CHAT ─────────────────────────────────────────────────
+window.openSession = async function(sessionId) {
+  currentSession = sessionId;
+  const s = sessions[sessionId];
+  await updateDoc(doc(db, 'sessions', sessionId), { hasNewMessage: false });
+
+  document.getElementById('mainEmpty').style.display = 'none';
+  const chatArea = document.getElementById('chatArea');
+  chatArea.style.display = 'flex';
+
+  buildHeader(sessionId);
+  buildQuickBtns();
+
+  if (msgUnsub) msgUnsub();
+  const q = query(collection(db, 'sessions', sessionId, 'messages'), orderBy('timestamp', 'asc'));
+  msgUnsub = onSnapshot(q, snap => {
+    const c = document.getElementById('chatMessages');
+    c.innerHTML = '';
+    snap.forEach(d => renderMsg(d.data()));
+    c.scrollTop = c.scrollHeight;
+  });
+  renderSessions();
+};
+
+function buildHeader(sessionId) {
+  const s = sessions[sessionId];
+  let expiryLine = '';
+  let btn = '';
+
+  if (s.status === 'active') {
+    const exp = s.expiresAt ? new Date(s.expiresAt).toLocaleDateString('fr', {day:'2-digit',month:'long',year:'numeric'}) : '?';
+    expiryLine = `<div class="expiry-info">📅 ${s.activeDuration||'?'} — expire le ${exp}</div>`;
+    btn = `<button class="remove-btn" onclick="removePremium('${sessionId}')">❌ Retirer Premium</button>`;
+  } else {
+    btn = `<button class="activate-btn" onclick="openActivateModal('${sessionId}')">⚡ Activer Premium</button>`;
+  }
+
+  document.getElementById('chatHeader').innerHTML = `
+    <div class="client-avatar">👤</div>
+    <div>
+      <div class="client-name">Client — ${s.id.substring(0,12)}…</div>
+      <div class="client-plan">Plan demandé : ${s.plan||'?'} (${s.amount||'?'})</div>
+      ${expiryLine}
+    </div>
+    <div class="status-badge">
+      <span class="badge ${s.status==='active'?'badge-active':'badge-waiting'}">
+        ${s.status==='active'?'✅ Premium actif':'⏳ En attente'}
+      </span>
+      ${btn}
+    </div>`;
+}
+
+function buildQuickBtns() {
+  document.getElementById('quickBtns').innerHTML = `
+    <button class="qb" onclick="quickReply('Bonjour ! Pour activer votre accès, envoyez le montant en USDT TRC-20 à cette adresse : [TON_ADRESSE]. Envoie-moi ensuite le hash de transaction.')">📋 Adresse paiement</button>
+    <button class="qb" onclick="quickReply('Bonjour ! Je suis disponible, comment puis-je vous aider ?')">👋 Saluer</button>
+    <button class="qb" onclick="quickReply('Votre paiement est en cours de vérification, merci de patienter quelques minutes ⏳')">⏳ Vérification</button>
+    <button class="qb" onclick="quickReply('Paiement reçu et vérifié ✅ Je procède à l\'activation maintenant !')">✅ Paiement reçu</button>
+  `;
+}
+
+// ── MESSAGES ──────────────────────────────────────────────────
+function renderMsg(msg) {
+  const c = document.getElementById('chatMessages');
+  const div = document.createElement('div');
+  const t = msg.timestamp ? new Date(msg.timestamp.toDate()).toLocaleTimeString('fr',{hour:'2-digit',minute:'2-digit'}) : '';
+  const isAdmin = msg.sender === 'admin';
+  div.className = `msg ${isAdmin?'admin':'client'}`;
+  div.innerHTML = `
+    <div class="msg-avatar ${isAdmin?'admin-av':'client-av'}">${isAdmin?'👑':'👤'}</div>
+    <div><div class="msg-bubble">${esc(msg.text)}</div><div class="msg-time">${t}</div></div>`;
+  c.appendChild(div);
+}
+
+window.sendReply = async function() {
+  const input = document.getElementById('adminInput');
+  const text = input.value.trim();
+  if (!text || !currentSession) return;
+  input.value = '';
+  await addDoc(collection(db, 'sessions', currentSession, 'messages'), { text, sender:'admin', timestamp:serverTimestamp() });
+  await setDoc(doc(db,'sessions',currentSession), { lastMessage:'(admin) '+text, hasNewMessage:false }, { merge:true });
+};
+
+window.quickReply = function(text) {
+  document.getElementById('adminInput').value = text;
+  document.getElementById('adminInput').focus();
+};
+
+document.getElementById('adminInput').addEventListener('keydown', e => {
+  if (e.key==='Enter' && !e.shiftKey) { e.preventDefault(); window.sendReply(); }
+});
+
+// ── MODAL ACTIVATION ──────────────────────────────────────────
+function addMonths(n) {
+  const d = new Date();
+  d.setMonth(d.getMonth() + n);
+  return d;
+}
+
+window.openActivateModal = function(sessionId) {
+  currentSession = sessionId;
+  selectedMonths = null;
+  document.getElementById('confirmBtn').disabled = true;
+  document.querySelectorAll('.plan-option').forEach(el => el.classList.remove('selected'));
+
+  [1,3,6,12].forEach(m => {
+    const exp = addMonths(m).toLocaleDateString('fr', {day:'2-digit', month:'short', year:'numeric'});
+    document.getElementById(`exp-${m}`).textContent = `Expire le ${exp}`;
+  });
+
+  document.getElementById('activateModal').style.display = 'flex';
+};
+
+window.selectPlan = function(el, months) {
+  document.querySelectorAll('.plan-option').forEach(o => o.classList.remove('selected'));
+  el.classList.add('selected');
+  selectedMonths = months;
+  document.getElementById('confirmBtn').disabled = false;
+};
+
+window.closeModal = function() {
+  document.getElementById('activateModal').style.display = 'none';
+  selectedMonths = null;
+};
+
+window.confirmActivation = async function() {
+  if (!selectedMonths) return;
+  const expiry = addMonths(selectedMonths);
+  const expiryStr = expiry.toLocaleDateString('fr', {day:'2-digit', month:'long', year:'numeric'});
+  const label = selectedMonths === 12 ? '1 An' : selectedMonths === 1 ? '1 Mois' : `${selectedMonths} Mois`;
+
+  await updateDoc(doc(db,'sessions',currentSession), {
+    status: 'active',
+    activeDuration: label,
+    expiresAt: expiry.toISOString()
+  });
+
+  await addDoc(collection(db,'sessions',currentSession,'messages'), {
+    text: `🎉 Votre compte Premium est maintenant activé ! Plan : ${label}. Accès valable jusqu'au ${expiryStr}. Profitez-en bien !`,
+    sender: 'admin',
+    timestamp: serverTimestamp()
+  });
+
+  sessions[currentSession] = { ...sessions[currentSession], status:'active', activeDuration:label, expiresAt:expiry.toISOString() };
+  closeModal();
+  openSession(currentSession);
+};
+
+// ── RETIRER PREMIUM ───────────────────────────────────────────
+window.removePremium = async function(sessionId) {
+  if (!confirm('Retirer le Premium de ce client ?')) return;
+
+  await updateDoc(doc(db,'sessions',sessionId), { status:'waiting', activeDuration:null, expiresAt:null });
+
+  await addDoc(collection(db,'sessions',sessionId,'messages'), {
+    text: '⚠️ Votre accès Premium a été désactivé. Contactez-nous si vous pensez que c\'est une erreur.',
+    sender: 'admin',
+    timestamp: serverTimestamp()
+  });
+
+  sessions[sessionId] = { ...sessions[sessionId], status:'waiting', activeDuration:null, expiresAt:null };
+  openSession(sessionId);
+};
+
+// ── UTILS ─────────────────────────────────────────────────────
+function esc(str) {
+  return (str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+}
+
+// ── GENERATE PREMIUM CODE ─────────────────────────────────────
+window.generateCode = async function() {
+  const months = parseInt(document.getElementById('codeDuration').value);
+  // Générer code aléatoire : ALPHA-XXXX-XXXX
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const rand = (n) => Array.from({length:n}, () => chars[Math.floor(Math.random()*chars.length)]).join('');
+  const code = `ALPHA-${rand(4)}-${rand(4)}`;
+
+  const expiry = new Date();
+  expiry.setMonth(expiry.getMonth() + months);
+  const label = months === 12 ? '1 An' : months === 1 ? '1 Mois' : `${months} Mois`;
+
+  // Sauvegarder dans Firebase
+  await setDoc(doc(db, 'premiumCodes', code), {
+    code,
+    label,
+    months,
+    expiresAt: expiry.toISOString(),
+    used: false,
+    createdAt: new Date().toISOString()
+  });
+
+  // Afficher
+  document.getElementById('codeValue').textContent = code;
+  document.getElementById('codeExpiry').textContent = `${label} — expire le ${expiry.toLocaleDateString('fr', {day:'2-digit', month:'long', year:'numeric'})}`;
+  document.getElementById('generatedCode').style.display = 'block';
+  document.getElementById('copyMsg').style.display = 'none';
+};
+
+window.copyCode = function() {
+  const code = document.getElementById('codeValue').textContent;
+  navigator.clipboard.writeText(code).then(() => {
+    document.getElementById('copyMsg').style.display = 'block';
+    setTimeout(() => document.getElementById('copyMsg').style.display = 'none', 2000);
+  });
+};
+</script>
+</body>
+</html>
