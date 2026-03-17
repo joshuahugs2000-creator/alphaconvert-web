@@ -1,11 +1,12 @@
 """
 api.py — Backend FastAPI pour AlphaConvert
 """
-import os, re, logging, unicodedata, base64
+import os, re, logging, unicodedata, base64, random
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 import yt_dlp
+from yt_dlp.networking.impersonate import ImpersonateTarget
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -22,7 +23,16 @@ app.add_middleware(
 DOWNLOAD_PATH = "/tmp/alphaconvert"
 os.makedirs(DOWNLOAD_PATH, exist_ok=True)
 
-# ── COOKIES ──────────────────────────────────────────────────────
+# ── PROXIES (rotation) ───────────────────────────────────────────────────────
+# Variable Railway: PROXY_URLS = http://user:pass@host:port,http://user:pass@host2:port2
+_raw_proxies = os.environ.get("PROXY_URLS", os.environ.get("PROXY_URL", ""))
+PROXY_LIST = [p.strip() for p in _raw_proxies.split(",") if p.strip()]
+logger.info(f"Proxies configurés: {len(PROXY_LIST)}")
+
+def _get_proxy() -> str | None:
+    return random.choice(PROXY_LIST) if PROXY_LIST else None
+
+# ── COOKIES ──────────────────────────────────────────────────────────────────
 def write_cookie(env_var: str, filename: str):
     val = os.environ.get(env_var, "")
     if not val:
@@ -59,12 +69,28 @@ def safe_filename(name: str) -> str:
     return name.strip() or "video"
 
 
+def _apply_instagram_opts(opts: dict) -> dict:
+    """Applique impersonate + proxy + cookies pour Instagram."""
+    opts["impersonate"] = ImpersonateTarget("chrome", "131")
+    proxy = _get_proxy()
+    if proxy:
+        opts["proxy"] = proxy
+        logger.info(f"Instagram : proxy activé → {proxy.split('@')[-1]}")
+    else:
+        logger.warning("Instagram : aucun proxy — risque de blocage")
+    if COOKIE_INSTAGRAM:
+        opts["cookiefile"] = COOKIE_INSTAGRAM
+    return opts
+
+
 @app.get("/info")
 async def get_info(url: str):
     platform = detect_platform(url)
     opts = {"quiet": True, "no_warnings": True, "skip_download": True}
-    if platform == "instagram" and COOKIE_INSTAGRAM:
-        opts["cookiefile"] = COOKIE_INSTAGRAM
+
+    if platform == "instagram":
+        opts = _apply_instagram_opts(opts)
+
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(url, download=False)
@@ -91,9 +117,8 @@ async def download(url: str, format: str = "mp4", quality: str = "720"):
         "restrictfilenames": True,
     }
 
-    if platform == "instagram" and COOKIE_INSTAGRAM:
-        base_opts["cookiefile"] = COOKIE_INSTAGRAM
-        logger.info("Instagram : cookies activés")
+    if platform == "instagram":
+        base_opts = _apply_instagram_opts(base_opts)
 
     if format == "mp3":
         opts = {**base_opts, "format": "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio"}
