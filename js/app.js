@@ -1,7 +1,7 @@
 // ── CONFIG ──────────────────────────────────────────────────
 const BACKEND = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   ? 'http://localhost:8000'
-  : 'https://alppha-convert-production.up.railway.app';
+  : 'https://alphaconvert-web-production.up.railway.app';
 
 const DAILY_LIMIT = 3;
 
