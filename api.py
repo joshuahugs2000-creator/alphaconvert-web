@@ -73,24 +73,18 @@ async def download(url: str, format: str = "mp4", quality: str = "720"):
     if format == "mp3":
         opts = {
             **base_opts,
-            "format": "bestaudio/best",
-            "postprocessors": [{
-                "key": "FFmpegExtractAudio",
-                "preferredcodec": "mp3",
-                "preferredquality": "192",
-            }],
+            "format": "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio",
         }
     else:
         qmap = {
-            "1080": "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080]/best",
-            "720":  "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720]/best",
-            "480":  "bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[height<=480]/best",
-            "360":  "bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/best[height<=360]/best",
+            "1080": "best[height<=1080][ext=mp4]/best[height<=1080]/best[ext=mp4]/best",
+            "720":  "best[height<=720][ext=mp4]/best[height<=720]/best[ext=mp4]/best",
+            "480":  "best[height<=480][ext=mp4]/best[height<=480]/best[ext=mp4]/best",
+            "360":  "best[height<=360][ext=mp4]/best[height<=360]/best[ext=mp4]/best",
         }
         opts = {
             **base_opts,
             "format": qmap.get(quality, qmap["720"]),
-            "merge_output_format": "mp4",
         }
 
     try:
