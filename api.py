@@ -1,346 +1,247 @@
-// ── CONFIG ──────────────────────────────────────────────────
-const BACKEND = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-  ? 'http://localhost:8000'
-  : 'https://alphaconvert-web-production.up.railway.app';
+"""
+api.py — Backend FastAPI AlphaConvert
+— yt-dlp prioritaire + RapidAPI fallback YouTube, TikTok, Instagram
+"""
+import os, re, logging, unicodedata, base64, random, httpx
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+import yt_dlp
+from yt_dlp.networking.impersonate import ImpersonateTarget
 
-const DAILY_LIMIT = 3;
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-// ── FIREBASE ─────────────────────────────────────────────────
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, doc, getDoc, setDoc, updateDoc, increment, collection }
-  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+app = FastAPI(title="AlphaConvert API")
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET"], allow_headers=["*"])
 
-const firebaseConfig = {
-  apiKey: "AIzaSyBJgtQp4ZrOPuUhmwiQw6FmOvt7nywudOc",
-  authDomain: "alphaconvert-d6d65.firebaseapp.com",
-  projectId: "alphaconvert-d6d65",
-  storageBucket: "alphaconvert-d6d65.firebasestorage.app",
-  messagingSenderId: "599445275974",
-  appId: "1:599445275974:web:9c19afd3c4f8219e3f9147"
-};
-const fbApp = initializeApp(firebaseConfig);
-const db = getFirestore(fbApp);
+DOWNLOAD_PATH = "/tmp/alphaconvert"
+os.makedirs(DOWNLOAD_PATH, exist_ok=True)
 
-// ── FINGERPRINT ───────────────────────────────────────────────
-function getFingerprint() {
-  const raw = [
-    navigator.userAgent,
-    navigator.language,
-    screen.width + 'x' + screen.height,
-    screen.colorDepth,
-    new Date().getTimezoneOffset(),
-    navigator.hardwareConcurrency || '',
-    navigator.platform || ''
-  ].join('|');
-  // Simple hash
-  let hash = 0;
-  for (let i = 0; i < raw.length; i++) {
-    hash = ((hash << 5) - hash) + raw.charCodeAt(i);
-    hash |= 0;
-  }
-  return Math.abs(hash).toString(36);
-}
+# ── Proxies ───────────────────────────────────────────────────────────────────
+_raw_proxies = os.environ.get("PROXY_URLS", os.environ.get("PROXY_URL", ""))
+PROXY_LIST = [p.strip() for p in _raw_proxies.split(",") if p.strip()]
 
-// ── IP ────────────────────────────────────────────────────────
-async function getIP() {
-  try {
-    const r = await fetch('https://api.ipify.org?format=json');
-    const d = await r.json();
-    return d.ip || 'unknown';
-  } catch { return 'unknown'; }
-}
+def _get_proxy():
+    return random.choice(PROXY_LIST) if PROXY_LIST else None
 
-// ── CLIENT ID = fingerprint + ip ─────────────────────────────
-let clientId = null;
-async function getClientId() {
-  if (clientId) return clientId;
-  const fp = getFingerprint();
-  const ip = await getIP();
-  clientId = `${fp}_${ip.replace(/\./g, '-')}`;
-  return clientId;
-}
+# ── RapidAPI ──────────────────────────────────────────────────────────────────
+_raw_keys = os.environ.get("RAPIDAPI_KEYS", os.environ.get("RAPIDAPI_KEY", ""))
+RAPIDAPI_KEYS = [k.strip() for k in _raw_keys.split(",") if k.strip()]
+_rapi_idx = 0
 
-// ── TODAY KEY ─────────────────────────────────────────────────
-function todayKey() {
-  return new Date().toISOString().split('T')[0]; // ex: "2026-03-17"
-}
+def _get_rapidapi_key():
+    global _rapi_idx
+    if not RAPIDAPI_KEYS: return None
+    key = RAPIDAPI_KEYS[_rapi_idx % len(RAPIDAPI_KEYS)]
+    _rapi_idx += 1
+    return key
 
-// ── PREMIUM CODE CHECK ────────────────────────────────────────
-let isPremium = false;
-let premiumExpiry = null;
+logger.info(f"Proxies: {len(PROXY_LIST)} | RapidAPI keys: {len(RAPIDAPI_KEYS)}")
 
-async function checkPremiumCode(code) {
-  try {
-    const ref = doc(db, 'premiumCodes', code.toUpperCase().trim());
-    const snap = await getDoc(ref);
-    if (!snap.exists()) return { valid: false, msg: '❌ Code invalide.' };
-    const data = snap.data();
-    if (data.used) return { valid: false, msg: '❌ Ce code a déjà été utilisé.' };
-    const expiry = new Date(data.expiresAt);
-    if (expiry < new Date()) return { valid: false, msg: '❌ Ce code est expiré.' };
-    // Marquer comme utilisé + lier au clientId
-    const cid = await getClientId();
-    await updateDoc(ref, { used: true, usedBy: cid, usedAt: new Date().toISOString() });
-    // Sauvegarder localement
-    localStorage.setItem('premiumCode', code.toUpperCase().trim());
-    localStorage.setItem('premiumExpiry', data.expiresAt);
-    return { valid: true, expiry: data.expiresAt, label: data.label };
-  } catch (e) {
-    return { valid: false, msg: '❌ Erreur de vérification.' };
-  }
-}
+# ── Cookies ───────────────────────────────────────────────────────────────────
+def _write_cookie(env_var, filename):
+    val = os.environ.get(env_var, "")
+    if not val: return None
+    try:
+        path = f"/tmp/{filename}"
+        with open(path, "wb") as f:
+            f.write(base64.b64decode(val))
+        return path
+    except: return None
 
-async function checkSavedPremium() {
-  const code = localStorage.getItem('premiumCode');
-  const expiry = localStorage.getItem('premiumExpiry');
-  if (!code || !expiry) return false;
-  const exp = new Date(expiry);
-  if (exp < new Date()) {
-    localStorage.removeItem('premiumCode');
-    localStorage.removeItem('premiumExpiry');
-    return false;
-  }
-  // Vérifier que le code existe encore et n'a pas été révoqué
-  try {
-    const ref = doc(db, 'premiumCodes', code);
-    const snap = await getDoc(ref);
-    if (!snap.exists() || snap.data().revoked) {
-      localStorage.removeItem('premiumCode');
-      localStorage.removeItem('premiumExpiry');
-      return false;
-    }
-  } catch { return false; }
-  isPremium = true;
-  premiumExpiry = expiry;
-  return true;
-}
+COOKIE_INSTAGRAM = _write_cookie("COOKIES_INSTAGRAM", "ig_cookies.txt")
 
-// ── DOWNLOAD LIMIT ────────────────────────────────────────────
-async function canDownload() {
-  if (isPremium) return { allowed: true };
-  const cid = await getClientId();
-  const today = todayKey();
-  const ref = doc(db, 'limits', `${cid}_${today}`);
-  try {
-    const snap = await getDoc(ref);
-    if (!snap.exists()) return { allowed: true, count: 0 };
-    const count = snap.data().count || 0;
-    if (count >= DAILY_LIMIT) return { allowed: false, count };
-    return { allowed: true, count };
-  } catch { return { allowed: true, count: 0 }; }
-}
+# ── Helpers ───────────────────────────────────────────────────────────────────
+def detect_platform(url: str) -> str:
+    u = url.lower()
+    if "youtube.com" in u or "youtu.be" in u: return "youtube"
+    if "instagram.com" in u: return "instagram"
+    if "tiktok.com" in u: return "tiktok"
+    return "unknown"
 
-async function recordDownload() {
-  if (isPremium) return;
-  const cid = await getClientId();
-  const today = todayKey();
-  const ref = doc(db, 'limits', `${cid}_${today}`);
-  try {
-    const snap = await getDoc(ref);
-    if (!snap.exists()) {
-      await setDoc(ref, { count: 1, clientId: cid, date: today });
-    } else {
-      await updateDoc(ref, { count: increment(1) });
-    }
-  } catch {}
-}
+def safe_filename(name: str) -> str:
+    name = unicodedata.normalize('NFKD', name).encode('ascii', 'ignore').decode('ascii')
+    return re.sub(r'[^\w\s\-.]', '_', name).strip() or "video"
 
-async function getDownloadCount() {
-  if (isPremium) return 0;
-  const cid = await getClientId();
-  const today = todayKey();
-  const ref = doc(db, 'limits', `${cid}_${today}`);
-  try {
-    const snap = await getDoc(ref);
-    return snap.exists() ? (snap.data().count || 0) : 0;
-  } catch { return 0; }
-}
+def _extract_yt_id(url: str) -> str:
+    m = re.search(r"(?:v=|youtu\.be/)([A-Za-z0-9_-]{11})", url)
+    return m.group(1) if m else url
 
-// ── UI PREMIUM BADGE ─────────────────────────────────────────
-function updatePremiumBadge() {
-  const badge = document.getElementById('premiumBadge');
-  const counter = document.getElementById('dlCounter');
-  if (!badge || !counter) return;
+def _save_stream(dl_url: str, title: str, ext: str) -> str:
+    safe = re.sub(r'[^\w\-]', '_', title)[:60]
+    path = os.path.join(DOWNLOAD_PATH, f"{safe}{ext}")
+    with httpx.stream("GET", dl_url, timeout=120, follow_redirects=True) as r:
+        r.raise_for_status()
+        with open(path, "wb") as f:
+            for chunk in r.iter_bytes(8192):
+                f.write(chunk)
+    return path
 
-  if (isPremium) {
-    const exp = new Date(premiumExpiry).toLocaleDateString('fr', {day:'2-digit', month:'long', year:'numeric'});
-    badge.innerHTML = `⭐ Premium actif — expire le ${exp}`;
-    badge.style.color = '#f59e0b';
-    badge.style.display = 'block';
-    counter.style.display = 'none';
-  } else {
-    badge.style.display = 'none';
-    getDownloadCount().then(count => {
-      const left = DAILY_LIMIT - count;
-      counter.textContent = `${left} téléchargement${left > 1 ? 's' : ''} gratuit${left > 1 ? 's' : ''} restant aujourd'hui`;
-      counter.style.color = left <= 1 ? '#ef4444' : '#6b7280';
-      counter.style.display = 'block';
-    });
-  }
-}
+def _apply_ig_opts(opts: dict) -> dict:
+    opts["impersonate"] = ImpersonateTarget("chrome", "131")
+    proxy = _get_proxy()
+    if proxy: opts["proxy"] = proxy
+    if COOKIE_INSTAGRAM: opts["cookiefile"] = COOKIE_INSTAGRAM
+    return opts
 
-// ── TABS ─────────────────────────────────────────────────────
-const tabPlaceholders = {
-  yt: 'Colle ton lien YouTube ici…',
-  ig: 'Colle ton lien Instagram ici…',
-  tt: 'Colle ton lien TikTok ici…'
-};
+# ── RapidAPI download ─────────────────────────────────────────────────────────
+def _rapi_download(url: str, platform: str, format_type: str) -> tuple:
+    key = _get_rapidapi_key()
+    if not key: return None, "media"
+    try:
+        if platform == "youtube" and format_type == "mp3":
+            r = httpx.get("https://youtube-mp36.p.rapidapi.com/dl",
+                params={"id": _extract_yt_id(url)},
+                headers={"X-RapidAPI-Key": key, "X-RapidAPI-Host": "youtube-mp36.p.rapidapi.com"}, timeout=30)
+            if r.status_code == 200:
+                d = r.json()
+                if d.get("link"):
+                    return _save_stream(d["link"], d.get("title", "audio"), ".mp3"), d.get("title", "audio")
 
-function switchTab(btn, platform) {
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  btn.classList.add('active');
-  document.getElementById('urlInput').placeholder = tabPlaceholders[platform];
-  hideResult();
-}
+        elif platform == "youtube":
+            r = httpx.get("https://yt-api.p.rapidapi.com/dl",
+                params={"id": _extract_yt_id(url), "cgeo": "US"},
+                headers={"X-RapidAPI-Key": key, "X-RapidAPI-Host": "yt-api.p.rapidapi.com"}, timeout=30)
+            if r.status_code == 200:
+                d = r.json()
+                formats = d.get("adaptiveFormats", []) + d.get("formats", [])
+                mp4s = [f for f in formats if f.get("mimeType", "").startswith("video/mp4")]
+                if mp4s:
+                    best = sorted(mp4s, key=lambda x: x.get("height", 0), reverse=True)[0]
+                    if best.get("url"):
+                        return _save_stream(best["url"], d.get("title", "video"), ".mp4"), d.get("title", "video")
 
-function selectFmt(el) {
-  document.querySelectorAll('.fmt-chip').forEach(c => c.classList.remove('selected'));
-  el.classList.add('selected');
-}
+        elif platform == "tiktok":
+            r = httpx.get("https://tiktok-scraper7.p.rapidapi.com/video/info",
+                params={"url": url, "hd": "1"},
+                headers={"X-RapidAPI-Key": key, "X-RapidAPI-Host": "tiktok-scraper7.p.rapidapi.com"}, timeout=30)
+            if r.status_code == 200:
+                d = r.json().get("data", {})
+                title = d.get("title", "tiktok")
+                dl_url = d.get("hdplay") or d.get("play") or d.get("wmplay")
+                if dl_url:
+                    ext = ".mp3" if format_type == "mp3" else ".mp4"
+                    return _save_stream(dl_url, title, ext), title
 
-function hideResult() {
-  document.getElementById('resultRow').classList.remove('show');
-  document.getElementById('loader').classList.remove('show');
-}
+        elif platform == "instagram":
+            r = httpx.get("https://instagram120.p.rapidapi.com/api/instagram/hls",
+                params={"url": url},
+                headers={"X-RapidAPI-Key": key, "X-RapidAPI-Host": "instagram120.p.rapidapi.com"}, timeout=30)
+            logger.info(f"Instagram120 hls: {r.status_code} | {r.text[:300]}")
+            if r.status_code == 200:
+                d = r.json()
+                def _find_video(obj):
+                    if isinstance(obj, dict):
+                        for k, v in obj.items():
+                            if k in ("video_url", "url", "src", "link") and isinstance(v, str) and "http" in v:
+                                return v
+                            if k == "video_versions" and isinstance(v, list) and v:
+                                return v[0].get("url")
+                            r2 = _find_video(v)
+                            if r2: return r2
+                    elif isinstance(obj, list):
+                        for item in obj:
+                            r2 = _find_video(item)
+                            if r2: return r2
+                    return None
+                video_url = _find_video(d)
+                if video_url:
+                    ext = ".mp3" if format_type == "mp3" else ".mp4"
+                    return _save_stream(video_url, "instagram_video", ext), "Instagram"
 
-function fmtDur(sec) {
-  if (!sec) return '';
-  const m = Math.floor(sec / 60), s = sec % 60;
-  return `${m}:${s.toString().padStart(2, '0')}`;
-}
+    except Exception as e:
+        logger.error(f"RapidAPI download [{platform}]: {e}")
+    return None, "media"
 
-function dlIcon() {
-  return `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-    <polyline points="7 10 12 15 17 10"/>
-    <line x1="12" y1="15" x2="12" y2="3"/>
-  </svg>`;
-}
+# ── Routes ────────────────────────────────────────────────────────────────────
+@app.get("/info")
+async def get_info(url: str):
+    platform = detect_platform(url)
+    opts = {"quiet": True, "no_warnings": True, "skip_download": True}
+    if platform == "instagram":
+        opts = _apply_ig_opts(opts)
 
-// ── ANALYZE ───────────────────────────────────────────────────
-async function analyze() {
-  const url = document.getElementById('urlInput').value.trim();
-  if (!url) { document.getElementById('urlInput').focus(); return; }
+    try:
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+        return {"title": info.get("title", "Vidéo"), "duration": info.get("duration", 0),
+                "thumbnail": info.get("thumbnail"), "uploader": info.get("uploader", ""), "platform": platform}
+    except Exception as e:
+        logger.warning(f"yt-dlp info [{platform}] failed → RapidAPI")
 
-  // Vérifier la limite
-  const { allowed, count } = await canDownload();
-  if (!allowed) {
-    showLimitModal();
-    return;
-  }
+    key = _get_rapidapi_key()
+    if key:
+        try:
+            if platform == "tiktok":
+                r = httpx.get("https://tiktok-scraper7.p.rapidapi.com/video/info",
+                    params={"url": url, "hd": "1"},
+                    headers={"X-RapidAPI-Key": key, "X-RapidAPI-Host": "tiktok-scraper7.p.rapidapi.com"}, timeout=15)
+                if r.status_code == 200:
+                    d = r.json().get("data", {})
+                    return {"title": d.get("title", "TikTok"), "duration": d.get("duration", 0),
+                            "thumbnail": d.get("cover"), "uploader": d.get("author", {}).get("nickname", ""),
+                            "platform": platform}
+            elif platform == "instagram":
+                return {"title": "Vidéo Instagram", "duration": 0,
+                        "thumbnail": None, "uploader": "Instagram", "platform": platform}
+            elif platform == "youtube":
+                r = httpx.get("https://youtube-mp36.p.rapidapi.com/dl",
+                    params={"id": _extract_yt_id(url)},
+                    headers={"X-RapidAPI-Key": key, "X-RapidAPI-Host": "youtube-mp36.p.rapidapi.com"}, timeout=15)
+                if r.status_code == 200:
+                    d = r.json()
+                    return {"title": d.get("title", "YouTube"), "duration": int(d.get("duration", 0) or 0),
+                            "thumbnail": None, "uploader": "YouTube", "platform": platform}
+        except Exception as e2:
+            logger.error(f"RapidAPI info [{platform}]: {e2}")
 
-  hideResult();
-  const loader = document.getElementById('loader');
-  loader.classList.add('show');
-  document.getElementById('loaderText').textContent = 'Analyse du lien en cours…';
+    raise HTTPException(status_code=400, detail="Impossible d'analyser ce lien")
 
-  try {
-    const res = await fetch(`${BACKEND}/info?url=${encodeURIComponent(url)}`);
-    if (!res.ok) throw new Error('Erreur serveur');
-    const data = await res.json();
 
-    loader.classList.remove('show');
+@app.get("/download")
+async def download(url: str, format: str = "mp4", quality: str = "720"):
+    platform = detect_platform(url)
+    tpl = os.path.join(DOWNLOAD_PATH, "%(id)s.%(ext)s")
+    base_opts = {"outtmpl": tpl, "quiet": False, "no_warnings": False, "restrictfilenames": True}
 
-    document.getElementById('rThumb').src = data.thumbnail || '';
-    document.getElementById('rTitle').textContent = data.title || 'Vidéo';
-    const dur = data.duration ? ` · ${fmtDur(data.duration)}` : '';
-    document.getElementById('rMeta').textContent = (data.platform || '') + dur;
+    if platform == "instagram":
+        base_opts = _apply_ig_opts(base_opts)
 
-    const formats = [
-      { label: 'MP4 1080p', fmt: 'mp4', q: '1080' },
-      { label: 'MP4 720p',  fmt: 'mp4', q: '720'  },
-      { label: 'MP4 480p',  fmt: 'mp4', q: '480'  },
-      { label: 'MP3 Audio', fmt: 'mp3', q: 'best'  },
-    ];
+    if format == "mp3":
+        opts = {**base_opts, "format": "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio"}
+    else:
+        qmap = {"1080": "best[height<=1080][ext=mp4]/best[height<=1080]/best",
+                "720":  "best[height<=720][ext=mp4]/best[height<=720]/best",
+                "480":  "best[height<=480][ext=mp4]/best[height<=480]/best",
+                "360":  "best[height<=360][ext=mp4]/best[height<=360]/best"}
+        fmt = "best[ext=mp4]/best" if platform == "instagram" else qmap.get(quality, qmap["720"])
+        opts = {**base_opts, "format": fmt}
 
-    document.getElementById('dlGrid').innerHTML = formats.map(f => `
-      <a class="dl-chip" href="#" onclick="handleDownload(event,'${encodeURIComponent(url)}','${f.fmt}','${f.q}')">
-        ${dlIcon()} ${f.label}
-      </a>
-    `).join('');
+    try:
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            info = ydl.extract_info(url, download=True)
+            vid = info.get("id", "video")
+            for ext in [".mp4", ".mp3", ".mkv", ".webm", ".m4a"]:
+                candidate = os.path.join(DOWNLOAD_PATH, f"{vid}{ext}")
+                if os.path.exists(candidate):
+                    title = safe_filename(info.get("title", "video"))
+                    dl_name = f"{title}{ext}"
+                    return FileResponse(candidate, media_type="application/octet-stream", filename=dl_name,
+                                        headers={"Content-Disposition": f'attachment; filename="{dl_name}"'})
+    except Exception as e:
+        logger.warning(f"yt-dlp download [{platform}] failed → RapidAPI")
 
-    document.getElementById('resultRow').classList.add('show');
+    file_path, title = _rapi_download(url, platform, format)
+    if file_path and os.path.exists(file_path):
+        ext = os.path.splitext(file_path)[1]
+        dl_name = f"{safe_filename(title)}{ext}"
+        return FileResponse(file_path, media_type="application/octet-stream", filename=dl_name,
+                            headers={"Content-Disposition": f'attachment; filename="{dl_name}"'})
 
-  } catch (e) {
-    loader.classList.remove('show');
-    alert('Impossible d\'analyser ce lien.\nVérifie qu\'il est public et réessaie.');
-  }
-}
+    raise HTTPException(status_code=400, detail="Téléchargement impossible")
 
-// ── DOWNLOAD HANDLER ─────────────────────────────────────────
-async function handleDownload(e, encodedUrl, fmt, q) {
-  e.preventDefault();
-  const { allowed } = await canDownload();
-  if (!allowed) { showLimitModal(); return; }
 
-  await recordDownload();
-  updatePremiumBadge();
-
-  const url = decodeURIComponent(encodedUrl);
-  window.location.href = `${BACKEND}/download?url=${encodedUrl}&format=${fmt}&quality=${q}`;
-}
-
-// ── LIMIT MODAL ───────────────────────────────────────────────
-function showLimitModal() {
-  document.getElementById('limitModal').style.display = 'flex';
-}
-function closeLimitModal() {
-  document.getElementById('limitModal').style.display = 'none';
-}
-
-// ── PREMIUM CODE MODAL ────────────────────────────────────────
-function openCodeModal() {
-  closeLimitModal();
-  document.getElementById('codeModal').style.display = 'flex';
-  document.getElementById('codeInput').value = '';
-  document.getElementById('codeMsg').textContent = '';
-}
-function closeCodeModal() {
-  document.getElementById('codeModal').style.display = 'none';
-}
-
-async function activateCode() {
-  const code = document.getElementById('codeInput').value.trim();
-  if (!code) return;
-  const btn = document.getElementById('activateBtn');
-  btn.disabled = true;
-  btn.textContent = 'Vérification…';
-  document.getElementById('codeMsg').textContent = '';
-
-  const result = await checkPremiumCode(code);
-  if (result.valid) {
-    isPremium = true;
-    premiumExpiry = result.expiry;
-    const exp = new Date(result.expiry).toLocaleDateString('fr', {day:'2-digit', month:'long', year:'numeric'});
-    document.getElementById('codeMsg').style.color = '#10b981';
-    document.getElementById('codeMsg').textContent = `✅ Premium activé ! Expire le ${exp}`;
-    updatePremiumBadge();
-    setTimeout(() => closeCodeModal(), 2000);
-  } else {
-    document.getElementById('codeMsg').style.color = '#ef4444';
-    document.getElementById('codeMsg').textContent = result.msg;
-  }
-  btn.disabled = false;
-  btn.textContent = 'Activer';
-}
-
-// ── INIT ──────────────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', async () => {
-  await checkSavedPremium();
-  updatePremiumBadge();
-
-  document.getElementById('urlInput').addEventListener('keydown', e => {
-    if (e.key === 'Enter') analyze();
-  });
-});
-
-// Expose functions to global scope (used in HTML onclick)
-window.switchTab = switchTab;
-window.selectFmt = selectFmt;
-window.analyze = analyze;
-window.handleDownload = handleDownload;
-window.showLimitModal = showLimitModal;
-window.closeLimitModal = closeLimitModal;
-window.openCodeModal = openCodeModal;
-window.closeCodeModal = closeCodeModal;
-window.activateCode = activateCode;
+@app.get("/health")
+async def health():
+    return {"status": "ok", "proxies": len(PROXY_LIST), "rapidapi_keys": len(RAPIDAPI_KEYS)}
