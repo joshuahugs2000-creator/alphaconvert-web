@@ -252,12 +252,62 @@ footer {
 footer a { color: #9ca3af; text-decoration: none; }
 footer a:hover { color: #fff; }
 
-@media (max-width: 600px) {
-  nav { padding: 0 1rem; }
+/* ── HAMBURGER ── */
+.hamburger {
+  display: none;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.4rem;
+  z-index: 200;
+}
+.hamburger span {
+  display: block;
+  width: 24px;
+  height: 2px;
+  background: #1a1a2e;
+  border-radius: 2px;
+  transition: all 0.3s;
+  transform-origin: center;
+}
+.hamburger.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+.hamburger.open span:nth-child(2) { opacity: 0; }
+.hamburger.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+
+@media (max-width: 768px) {
+  .hamburger { display: flex; }
+  .nav-links {
+    display: none;
+    position: fixed;
+    top: 64px; left: 0; right: 0; bottom: 0;
+    background: #fff;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1.5rem;
+    z-index: 150;
+    padding: 2rem;
+  }
+  .nav-links.open { display: flex; }
+  .nav-links a { font-size: 1.1rem; padding: 0.8rem 1.5rem; width: 100%; text-align: center; }
+  .nav-btn { width: 100%; text-align: center; }
   .hero { padding: 2.5rem 1rem 2rem; }
+  .hero h1 { font-size: 1.9rem; }
+  .hero-sub { font-size: 0.95rem; }
   .input-zone { padding: 1.2rem; }
   .url-row { flex-direction: column; }
+  .go-btn { width: 100%; justify-content: center; }
+  .format-row { gap: 0.4rem; }
+  .fmt-chip { font-size: 0.78rem; padding: 0.45rem 0.7rem; }
   .result-row { flex-direction: column; }
   .result-thumb { width: 100%; }
-  .tg-banner { padding: 1.5rem; flex-direction: column; }
+  .feat-grid { grid-template-columns: 1fr; }
+  .steps-row { flex-direction: column; align-items: center; }
+  .step { max-width: 280px; }
+  .tg-banner { padding: 1.5rem; flex-direction: column; text-align: center; }
+  .platforms-strip { gap: 0.6rem; flex-wrap: wrap; justify-content: center; }
+  footer { padding: 1.5rem 1rem; font-size: 0.82rem; }
 }
