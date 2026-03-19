@@ -217,7 +217,8 @@ window.login = function() {
   if (pw === ADMIN_PASSWORD) {
     document.getElementById('loginScreen').style.display = 'none';
     document.getElementById('app').style.display = 'flex';
-    startListening();
+    requestNotifPermission();
+  startListening();
   } else {
     document.getElementById('loginError').style.display = 'block';
   }
@@ -225,6 +226,41 @@ window.login = function() {
 document.getElementById('adminPassword').addEventListener('keydown', e => {
   if (e.key === 'Enter') window.login();
 });
+
+// ── NOTIFICATIONS NAVIGATEUR ─────────────────────────────────
+let prevUnread = 0;
+
+function requestNotifPermission() {
+  if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
+}
+
+function playSound() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.frequency.setValueAtTime(880, ctx.currentTime);
+    osc.frequency.setValueAtTime(660, ctx.currentTime + 0.1);
+    gain.gain.setValueAtTime(0.3, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.4);
+  } catch(e) {}
+}
+
+function sendBrowserNotif(text) {
+  if ('Notification' in window && Notification.permission === 'granted') {
+    const n = new Notification('💬 Nouveau message — AlphaConvert', {
+      body: text,
+      icon: '/favicon.ico',
+    });
+    setTimeout(() => n.close(), 5000);
+  }
+}
 
 // ── FIRESTORE ─────────────────────────────────────────────────
 function startListening() {
@@ -238,6 +274,14 @@ function startListening() {
     badge.style.display = unread > 0 ? 'inline' : 'none';
     badge.textContent = unread;
     document.title = unread > 0 ? `(${unread}) Admin — AlphaConvert` : 'Admin — AlphaConvert';
+    // Notif si nouveau message
+    if (unread > prevUnread) {
+      playSound();
+      const newSessions = Object.values(sessions).filter(s => s.hasNewMessage);
+      const last = newSessions[newSessions.length - 1];
+      sendBrowserNotif(last?.lastMessage || 'Un client attend une réponse.');
+    }
+    prevUnread = unread;
   });
 }
 
