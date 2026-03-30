@@ -5,8 +5,146 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AlphaConvert — Téléchargeur YouTube & TikTok</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
+<style>
+/* ── AUTH NAV ── */
+.nav-auth { display:flex; align-items:center; gap:0.6rem; }
+.btn-login {
+  padding:0.45rem 1.1rem; border-radius:8px; font-size:0.85rem; font-weight:600;
+  border:1.5px solid #e5e7eb; background:#fff; color:#374151; cursor:pointer;
+  font-family:inherit; text-decoration:none; transition:all 0.2s;
+}
+.btn-login:hover { border-color:#4f46e5; color:#4f46e5; }
+.btn-signup {
+  padding:0.45rem 1.1rem; border-radius:8px; font-size:0.85rem; font-weight:700;
+  background:linear-gradient(135deg,#059669,#10b981); color:#fff; cursor:pointer;
+  font-family:inherit; text-decoration:none; border:none; transition:all 0.2s;
+}
+.btn-signup:hover { opacity:0.9; transform:translateY(-1px); }
+
+/* ── USER MENU ── */
+.user-menu-wrap { position:relative; }
+.user-trigger {
+  display:flex; align-items:center; gap:0.5rem; cursor:pointer;
+  padding:0.3rem 0.6rem 0.3rem 0.3rem; border-radius:100px;
+  border:1.5px solid #e5e7eb; background:#fff; transition:all 0.2s;
+}
+.user-trigger:hover { border-color:#4f46e5; }
+.user-avatar {
+  width:30px; height:30px; border-radius:50%;
+  background:linear-gradient(135deg,#4f46e5,#7c3aed);
+  display:flex; align-items:center; justify-content:center;
+  color:#fff; font-size:0.78rem; font-weight:700; flex-shrink:0;
+}
+.user-name { font-size:0.82rem; font-weight:600; color:#374151; max-width:100px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.premium-dot { width:8px; height:8px; border-radius:50%; background:#f59e0b; flex-shrink:0; }
+.hamburger-icon { display:flex; flex-direction:column; gap:4px; padding:0.2rem; }
+.hamburger-icon span { display:block; width:16px; height:1.5px; background:#9ca3af; border-radius:2px; transition:all 0.2s; }
+
+/* ── DROPDOWN ── */
+.user-dropdown {
+  position:absolute; top:calc(100% + 8px); right:0;
+  background:#fff; border:1.5px solid #e5e7eb; border-radius:14px;
+  box-shadow:0 12px 40px rgba(0,0,0,0.12); min-width:220px;
+  padding:0.5rem; display:none; z-index:200;
+  animation:dropIn 0.15s ease;
+}
+@keyframes dropIn { from{opacity:0;transform:translateY(-8px)} to{opacity:1;transform:translateY(0)} }
+.user-dropdown.open { display:block; }
+.dropdown-header { padding:0.8rem 0.9rem 0.6rem; border-bottom:1px solid #f0f0f5; margin-bottom:0.3rem; }
+.dropdown-name { font-size:0.9rem; font-weight:700; color:#0f0f1a; }
+.dropdown-email { font-size:0.75rem; color:#9ca3af; margin-top:1px; }
+.dropdown-plan {
+  display:inline-flex; align-items:center; gap:0.35rem;
+  margin-top:0.4rem; background:#fef3c7; color:#92400e;
+  font-size:0.72rem; font-weight:700; padding:0.2rem 0.6rem; border-radius:100px;
+}
+.dropdown-plan.free { background:#f3f4f6; color:#6b7280; }
+.dropdown-item {
+  display:flex; align-items:center; gap:0.7rem; padding:0.6rem 0.9rem;
+  border-radius:8px; font-size:0.85rem; font-weight:500; color:#374151;
+  cursor:pointer; text-decoration:none; transition:background 0.15s; border:none; background:none; width:100%; font-family:inherit;
+}
+.dropdown-item:hover { background:#f5f5ff; color:#4f46e5; }
+.dropdown-item.danger:hover { background:#fef2f2; color:#ef4444; }
+.dropdown-item svg { flex-shrink:0; opacity:0.6; }
+.dropdown-sep { height:1px; background:#f0f0f5; margin:0.3rem 0; }
+
+/* ── PREMIUM TOAST ── */
+.premium-toast {
+  position:fixed; top:80px; right:1.5rem; z-index:300;
+  background:linear-gradient(135deg,#f59e0b,#d97706); color:#fff;
+  padding:0.8rem 1.2rem; border-radius:12px; font-size:0.85rem; font-weight:600;
+  box-shadow:0 8px 25px rgba(245,158,11,0.35); display:flex; align-items:center; gap:0.6rem;
+  transform:translateX(120%); transition:transform 0.4s cubic-bezier(0.34,1.56,0.64,1);
+  max-width:280px;
+}
+.premium-toast.show { transform:translateX(0); }
+
+/* ── HERO AUTH SECTION ── */
+.hero-auth-strip {
+  display:flex; align-items:center; justify-content:center; gap:1rem;
+  margin-bottom:1rem; flex-wrap:wrap;
+}
+.hero-user-badge {
+  display:inline-flex; align-items:center; gap:0.5rem;
+  background:#fff; border:1.5px solid #e5e7eb; border-radius:100px;
+  padding:0.35rem 0.9rem 0.35rem 0.4rem; font-size:0.82rem; font-weight:600; color:#374151;
+  box-shadow:0 2px 8px rgba(0,0,0,0.06);
+}
+.hero-premium-badge {
+  display:inline-flex; align-items:center; gap:0.4rem;
+  background:linear-gradient(135deg,#fef3c7,#fde68a); color:#92400e;
+  border:1.5px solid #fcd34d; border-radius:100px;
+  padding:0.35rem 0.9rem; font-size:0.82rem; font-weight:700;
+  box-shadow:0 2px 8px rgba(245,158,11,0.2);
+}
+
+/* ── AUTH MODAL ── */
+.modal-overlay {
+  display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55);
+  z-index:400; align-items:center; justify-content:center; backdrop-filter:blur(6px);
+}
+.modal-overlay.show { display:flex; }
+.auth-modal {
+  background:#fff; border-radius:24px; padding:2rem; max-width:420px; width:90%;
+  box-shadow:0 30px 80px rgba(0,0,0,0.15); position:relative;
+  animation:modalIn 0.25s cubic-bezier(0.34,1.56,0.64,1);
+}
+@keyframes modalIn { from{opacity:0;transform:scale(0.9)} to{opacity:1;transform:scale(1)} }
+.modal-close { position:absolute; top:1rem; right:1rem; background:#f5f5f5; border:none; border-radius:50%; width:28px; height:28px; cursor:pointer; font-size:1rem; display:flex; align-items:center; justify-content:center; color:#6b7280; transition:all 0.15s; }
+.modal-close:hover { background:#ef4444; color:#fff; }
+.auth-modal h2 { font-size:1.4rem; font-weight:800; margin-bottom:0.3rem; font-family:'Syne',sans-serif; }
+.auth-modal p { font-size:0.875rem; color:#6b7280; margin-bottom:1.5rem; }
+.auth-tabs { display:flex; background:#f5f5f5; border-radius:10px; padding:3px; margin-bottom:1.5rem; }
+.auth-tab {
+  flex:1; padding:0.55rem; font-size:0.85rem; font-weight:700; border:none;
+  background:none; cursor:pointer; border-radius:8px; transition:all 0.2s; font-family:inherit; color:#6b7280;
+}
+.auth-tab.login.active { background:#4f46e5; color:#fff; box-shadow:0 2px 8px rgba(79,70,229,0.3); }
+.auth-tab.signup.active { background:linear-gradient(135deg,#059669,#10b981); color:#fff; box-shadow:0 2px 8px rgba(16,185,129,0.3); }
+.form-group { margin-bottom:1rem; }
+.form-label { display:block; font-size:0.78rem; font-weight:700; color:#374151; margin-bottom:0.4rem; letter-spacing:0.03em; text-transform:uppercase; }
+.form-input { width:100%; border:1.5px solid #e5e7eb; border-radius:10px; padding:0.75rem 1rem; font-size:0.9rem; font-family:inherit; color:#1a1a2e; outline:none; transition:all 0.2s; }
+.form-input:focus { border-color:#4f46e5; box-shadow:0 0 0 3px rgba(79,70,229,0.1); }
+.form-btn-login { width:100%; background:#4f46e5; color:#fff; border:none; border-radius:10px; padding:0.85rem; font-size:0.95rem; font-weight:700; cursor:pointer; font-family:inherit; margin-top:0.5rem; transition:all 0.2s; }
+.form-btn-login:hover { background:#4338ca; }
+.form-btn-signup { width:100%; background:linear-gradient(135deg,#059669,#10b981); color:#fff; border:none; border-radius:10px; padding:0.85rem; font-size:0.95rem; font-weight:700; cursor:pointer; font-family:inherit; margin-top:0.5rem; transition:all 0.2s; }
+.form-btn-signup:hover { opacity:0.9; }
+.form-btn:disabled { opacity:0.6; cursor:not-allowed; }
+.form-msg { font-size:0.82rem; min-height:1rem; margin-top:0.5rem; font-weight:600; text-align:center; }
+.auth-divider { display:flex; align-items:center; gap:0.8rem; margin:1rem 0; }
+.auth-divider::before, .auth-divider::after { content:''; flex:1; height:1px; background:#e5e7eb; }
+.auth-divider span { font-size:0.75rem; color:#9ca3af; font-weight:600; }
+.google-btn { width:100%; display:flex; align-items:center; justify-content:center; gap:0.7rem; background:#fff; border:1.5px solid #e5e7eb; border-radius:10px; padding:0.75rem; font-size:0.9rem; font-weight:600; cursor:pointer; font-family:inherit; transition:all 0.2s; }
+.google-btn:hover { border-color:#4f46e5; background:#f8f7ff; }
+
+@media(max-width:768px) {
+  .user-name { display:none; }
+  .btn-login span { display:none; }
+}
+</style>
 </head>
 <body>
 
@@ -21,19 +159,79 @@
     <a href="#features">Fonctionnalités</a>
     <a href="#how">Comment ça marche</a>
     <a href="premium.html" style="color:#f59e0b;font-weight:700">⭐ Premium</a>
-    <a href="https://t.me/alphaconvert_bot" class="nav-btn">Bot Telegram</a>
+  </div>
+
+  <!-- AUTH ZONE -->
+  <div class="nav-auth" id="navAuthZone">
+    <!-- Non connecté -->
+    <div id="navGuest">
+      <a href="#" class="btn-login" onclick="openAuth('login'); return false;"><span>Connexion</span></a>
+      <a href="#" class="btn-signup" onclick="openAuth('signup'); return false;">S'inscrire</a>
+    </div>
+    <!-- Connecté -->
+    <div id="navUser" style="display:none" class="user-menu-wrap">
+      <div class="user-trigger" onclick="toggleDropdown()">
+        <div class="user-avatar" id="navAvatar">?</div>
+        <span class="user-name" id="navName"></span>
+        <div class="premium-dot" id="navPremiumDot" style="display:none"></div>
+        <div class="hamburger-icon">
+          <span></span><span></span><span></span>
+        </div>
+      </div>
+      <div class="user-dropdown" id="userDropdown">
+        <div class="dropdown-header">
+          <div class="dropdown-name" id="dropName"></div>
+          <div class="dropdown-email" id="dropEmail"></div>
+          <div class="dropdown-plan free" id="dropPlan">Gratuit</div>
+        </div>
+        <a href="premium.html" class="dropdown-item">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          Mon plan Premium
+        </a>
+        <a href="premium.html#chat" class="dropdown-item">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          Contacter le support
+        </a>
+        <a href="https://t.me/Loicdev" target="_blank" class="dropdown-item">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2L15 22 11 13 2 9l20-7z"/></svg>
+          Telegram @Loicdev
+        </a>
+        <div class="dropdown-sep"></div>
+        <button class="dropdown-item danger" onclick="logoutUser()">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          Déconnexion
+        </button>
+      </div>
+    </div>
   </div>
 </nav>
 
+<!-- PREMIUM TOAST -->
+<div class="premium-toast" id="premiumToast">
+  ⭐ Bienvenue, membre Premium !
+</div>
+
 <!-- HERO -->
 <section class="hero">
+  <!-- HERO AUTH STRIP -->
+  <div class="hero-auth-strip" id="heroAuthStrip" style="display:none">
+    <div class="hero-user-badge" id="heroUserBadge">
+      <div class="user-avatar" id="heroAvatar" style="width:24px;height:24px;font-size:0.7rem">?</div>
+      <span id="heroName"></span>
+    </div>
+    <div class="hero-premium-badge" id="heroPremiumBadge" style="display:none">
+      ⭐ Premium actif
+    </div>
+  </div>
+
   <div class="hero-badge">
     <span class="hero-badge-dot"></span>
-    Gratuit · Sans inscription · Illimité
+    Gratuit · Rapide · Sans limite cachée
   </div>
-  <!-- STATUT PREMIUM / COMPTEUR -->
+
   <div id="premiumBadge" style="display:none; font-size:0.82rem; font-weight:700; margin-bottom:0.5rem;"></div>
   <div id="dlCounter" style="display:none; font-size:0.78rem; margin-bottom:0.5rem;"></div>
+
   <h1>Télécharge depuis <span style="color:#ff0000">YouTube</span><br>&amp; <span style="color:#69c9d0">TikTok</span></h1>
   <p class="hero-sub">Colle ton lien, choisis le format — MP4 ou MP3 — et télécharge instantanément.</p>
 
@@ -44,7 +242,6 @@
         <svg width="16" height="16" viewBox="0 0 24 24" fill="#ff0000"><path d="M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.5 12 3.5 12 3.5s-7.5 0-9.4.6A3 3 0 0 0 .5 6.2C0 8.1 0 12 0 12s0 3.9.5 5.8a3 3 0 0 0 2.1 2.1c1.9.6 9.4.6 9.4.6s7.5 0 9.4-.6a3 3 0 0 0 2.1-2.1C24 15.9 24 12 24 12s0-3.9-.5-5.8z"/><path d="M9.8 15.5V8.5l6.3 3.5-6.3 3.5z" fill="#fff"/></svg>
         YouTube
       </button>
-      
       <button class="tab" onclick="switchTab(this,'tt')">
         <svg width="16" height="16" viewBox="0 0 24 24"><path d="M19.6 3.3A4.9 4.9 0 0 1 14.7 0h-3.6v16.4a2.9 2.9 0 0 1-2.9 2.5 2.9 2.9 0 0 1-2.9-2.9 2.9 2.9 0 0 1 2.9-2.9c.3 0 .5 0 .8.1V9.5a6.5 6.5 0 0 0-.8-.1 6.5 6.5 0 0 0-6.5 6.5 6.5 6.5 0 0 0 6.5 6.5 6.5 6.5 0 0 0 6.5-6.5V8.2a8.4 8.4 0 0 0 4.9 1.6V6.2a4.9 4.9 0 0 1-3.1-2.9z" fill="#010101" stroke="#69c9d0" stroke-width="0.5"/></svg>
         TikTok
@@ -53,38 +250,26 @@
 
     <div class="input-zone">
       <div class="url-row">
-        <input class="url-input" id="urlInput" type="url"
-          placeholder="Colle ton lien YouTube ici…">
+        <input class="url-input" id="urlInput" type="url" placeholder="Colle ton lien YouTube ici…">
         <button class="go-btn" onclick="analyze()">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-            <polyline points="7 10 12 15 17 10"/>
-            <line x1="12" y1="15" x2="12" y2="3"/>
-          </svg>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           Télécharger
         </button>
       </div>
-
       <div class="fmt-label">Format de téléchargement</div>
       <div class="format-row">
         <div class="fmt-chip selected" data-fmt="mp4" data-q="1080" onclick="selectFmt(this)">MP4 1080p HD</div>
-        <div class="fmt-chip" data-fmt="mp4" data-q="720"  onclick="selectFmt(this)">MP4 720p</div>
-        <div class="fmt-chip" data-fmt="mp4" data-q="480"  onclick="selectFmt(this)">MP4 480p</div>
-        <div class="fmt-chip" data-fmt="mp4" data-q="360"  onclick="selectFmt(this)">MP4 360p</div>
+        <div class="fmt-chip" data-fmt="mp4" data-q="720" onclick="selectFmt(this)">MP4 720p</div>
+        <div class="fmt-chip" data-fmt="mp4" data-q="480" onclick="selectFmt(this)">MP4 480p</div>
+        <div class="fmt-chip" data-fmt="mp4" data-q="360" onclick="selectFmt(this)">MP4 360p</div>
         <div class="fmt-chip" data-fmt="mp3" data-q="best" onclick="selectFmt(this)">MP3 Audio</div>
       </div>
-
-      <!-- Loader -->
       <div class="loader-row" id="loader">
         <div class="spin"></div>
         <span id="loaderText">Analyse du lien en cours…</span>
       </div>
-
-      <!-- Résultat -->
       <div class="result-row" id="resultRow">
-        <div class="result-thumb">
-          <img id="rThumb" src="" alt="">
-        </div>
+        <div class="result-thumb"><img id="rThumb" src="" alt=""></div>
         <div class="result-info">
           <div class="result-title" id="rTitle">—</div>
           <div class="result-meta" id="rMeta">—</div>
@@ -94,7 +279,6 @@
     </div>
   </div>
 
-  <!-- Platform badges -->
   <div class="platforms-strip">
     <div class="p-badge"><span class="p-dot" style="background:#ff0000"></span> YouTube</div>
     <div class="p-badge"><span class="p-dot" style="background:#010101;outline:1px solid #69c9d0"></span> TikTok</div>
@@ -117,7 +301,21 @@
         <h3>YouTube jusqu'à 1080p</h3>
         <p>Télécharge en 360p, 480p, 720p ou 1080p HD. Audio séparé en MP3 192kbps.</p>
       </div>
-      
+      <div class="feat-card">
+        <div class="feat-icon" style="background:#f0fdf4">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        </div>
+        <h3>Téléchargement instantané</h3>
+        <p>Pas d'attente, pas de file d'attente. Le fichier est prêt en quelques secondes.</p>
+      </div>
+      <div class="feat-card">
+        <div class="feat-icon" style="background:#ede9fe">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        </div>
+        <h3>100% sécurisé</h3>
+        <p>Aucun fichier stocké sur nos serveurs. Téléchargement direct et privé.</p>
+      </div>
+    </div>
   </div>
 </section>
 
@@ -149,34 +347,32 @@
 </section>
 
 <!-- TELEGRAM BANNER -->
-<div style="padding: 0 2rem 4rem; max-width:1100px; margin:0 auto;">
+<div style="padding:0 2rem 4rem; max-width:1100px; margin:0 auto;">
   <div class="tg-banner">
     <div style="font-size:2.5rem">✈️</div>
     <div class="tg-banner-text">
       <h3>Disponible aussi sur Telegram</h3>
       <p>Envoie directement tes liens sur notre bot Telegram — depuis ton téléphone, en 2 secondes.</p>
     </div>
-    <a href="https://t.me/alphaconvert_bot" class="tg-link">Ouvrir le bot →</a>
+    <a href="https://t.me/Loicdev" class="tg-link">Ouvrir le bot →</a>
   </div>
 </div>
 
 <!-- FOOTER -->
 <footer>
-  <p style="margin-bottom:0.5rem">
-    <strong style="color:#fff">AlphaConvert</strong> — Téléchargeur YouTube &amp; TikTok
-  </p>
+  <p style="margin-bottom:0.5rem"><strong style="color:#fff">AlphaConvert</strong> — Téléchargeur YouTube &amp; TikTok</p>
   <p>© 2026 · <a href="#">Confidentialité</a> · <a href="#">Conditions</a></p>
 </footer>
 
-<!-- MODAL LIMITE ATTEINTE -->
+<!-- MODAL LIMITE -->
 <div id="limitModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.75); z-index:1000; align-items:center; justify-content:center;">
   <div style="background:#1a1a2e; border:1.5px solid #2a2a3e; border-radius:16px; padding:2rem; max-width:400px; width:90%; text-align:center;">
     <div style="font-size:2.5rem; margin-bottom:1rem">🚫</div>
     <h3 style="font-size:1.1rem; font-weight:800; margin-bottom:0.5rem; color:#fff">Limite atteinte</h3>
-    <p style="color:#6b7280; font-size:0.85rem; margin-bottom:1.5rem">Tu as utilisé tes 3 téléchargements gratuits d'aujourd'hui. Reviens demain ou active un accès Premium.</p>
+    <p style="color:#6b7280; font-size:0.85rem; margin-bottom:1.5rem">Tu as utilisé tes 3 téléchargements gratuits d'aujourd'hui.</p>
     <div style="display:flex; gap:0.8rem; justify-content:center;">
       <button onclick="closeLimitModal()" style="padding:0.7rem 1.2rem; background:#252538; color:#9ca3af; border:none; border-radius:10px; font-size:0.88rem; font-weight:700; cursor:pointer; font-family:inherit;">Fermer</button>
-      <button onclick="openCodeModal()" style="padding:0.7rem 1.4rem; background:#f59e0b; color:#000; border:none; border-radius:10px; font-size:0.88rem; font-weight:700; cursor:pointer; font-family:inherit;">⭐ J'ai un code Premium</button>
+      <a href="premium.html" style="padding:0.7rem 1.4rem; background:#f59e0b; color:#000; border:none; border-radius:10px; font-size:0.88rem; font-weight:700; cursor:pointer; font-family:inherit; text-decoration:none;">⭐ Voir Premium</a>
     </div>
   </div>
 </div>
@@ -195,10 +391,61 @@
       <button onclick="closeCodeModal()" style="padding:0.7rem 1.2rem; background:#252538; color:#9ca3af; border:none; border-radius:10px; font-size:0.88rem; font-weight:700; cursor:pointer; font-family:inherit;">Annuler</button>
       <button id="activateBtn" onclick="activateCode()" style="padding:0.7rem 1.4rem; background:#f59e0b; color:#000; border:none; border-radius:10px; font-size:0.88rem; font-weight:700; cursor:pointer; font-family:inherit;">Activer</button>
     </div>
-    <p style="margin-top:1rem; font-size:0.75rem; color:#4b5563;">Pas encore Premium ? <a href="premium.html" style="color:#f59e0b;">Voir les offres →</a></p>
   </div>
 </div>
 
+<!-- AUTH MODAL -->
+<div class="modal-overlay" id="authModal">
+  <div class="auth-modal">
+    <button class="modal-close" onclick="closeAuth()">×</button>
+    <h2>Bienvenue 👋</h2>
+    <p>Connecte-toi pour gérer ton abonnement Premium.</p>
+    <div class="auth-tabs">
+      <button class="auth-tab login active" id="tabLogin" onclick="switchTab2('login')">Connexion</button>
+      <button class="auth-tab signup" id="tabSignup" onclick="switchTab2('signup')">Inscription</button>
+    </div>
+    <!-- LOGIN -->
+    <div id="loginForm">
+      <div class="form-group">
+        <label class="form-label">Email</label>
+        <input class="form-input" id="loginEmail" type="email" placeholder="toi@email.com">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Mot de passe</label>
+        <input class="form-input" id="loginPass" type="password" placeholder="••••••••">
+      </div>
+      <button class="form-btn-login" id="loginBtn" onclick="loginUser()">Se connecter</button>
+      <div class="form-msg" id="loginMsg"></div>
+      <div class="auth-divider"><span>ou</span></div>
+      <button class="google-btn" onclick="loginGoogle()">
+        <svg width="18" height="18" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+        Continuer avec Google
+      </button>
+    </div>
+    <!-- SIGNUP -->
+    <div id="signupForm" style="display:none">
+      <div class="form-group">
+        <label class="form-label">Prénom</label>
+        <input class="form-input" id="signupName" type="text" placeholder="Ton prénom">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Email</label>
+        <input class="form-input" id="signupEmail" type="email" placeholder="toi@email.com">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Mot de passe</label>
+        <input class="form-input" id="signupPass" type="password" placeholder="Au moins 6 caractères">
+      </div>
+      <button class="form-btn-signup" id="signupBtn" onclick="signupUser()">Créer mon compte</button>
+      <div class="form-msg" id="signupMsg"></div>
+      <div class="auth-divider"><span>ou</span></div>
+      <button class="google-btn" onclick="loginGoogle()">
+        <svg width="18" height="18" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+        Continuer avec Google
+      </button>
+    </div>
+  </div>
+</div>
 
 <script>
 function toggleMenu() {
@@ -213,7 +460,156 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   });
 });
+function toggleDropdown() {
+  document.getElementById('userDropdown').classList.toggle('open');
+}
+document.addEventListener('click', function(e) {
+  const wrap = document.querySelector('.user-menu-wrap');
+  if (wrap && !wrap.contains(e.target)) {
+    document.getElementById('userDropdown')?.classList.remove('open');
+  }
+});
+function openAuth(tab) {
+  document.getElementById('authModal').classList.add('show');
+  switchTab2(tab || 'login');
+}
+function closeAuth() {
+  document.getElementById('authModal').classList.remove('show');
+}
+function switchTab2(tab) {
+  document.getElementById('loginForm').style.display = tab === 'login' ? 'block' : 'none';
+  document.getElementById('signupForm').style.display = tab === 'signup' ? 'block' : 'none';
+  document.getElementById('tabLogin').classList.toggle('active', tab === 'login');
+  document.getElementById('tabSignup').classList.toggle('active', tab === 'signup');
+}
+window.openAuth = openAuth;
+window.closeAuth = closeAuth;
 </script>
+
 <script type="module" src="js/app.js"></script>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, doc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getAuth, onAuthStateChanged, signOut, createUserWithEmailAndPassword, signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, updateProfile } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBJgtQp4ZrOPuUhmwiQw6FmOvt7nywudOc",
+  authDomain: "alphaconvert-d6d65.firebaseapp.com",
+  projectId: "alphaconvert-d6d65",
+  storageBucket: "alphaconvert-d6d65.firebasestorage.app",
+  messagingSenderId: "599445275974",
+  appId: "1:599445275974:web:9c19afd3c4f8219e3f9147"
+};
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const auth = getAuth(app);
+const gProvider = new GoogleAuthProvider();
+let premiumShown = false;
+
+async function checkPremiumStatus(user) {
+  // Vérifie localStorage d'abord
+  const code = localStorage.getItem('premiumCode');
+  const expiry = localStorage.getItem('premiumExpiry');
+  if (code && expiry && new Date(expiry) > new Date()) return true;
+  // Vérifie Firestore
+  try {
+    const snap = await getDoc(doc(db, 'users', user.uid));
+    if (snap.exists() && snap.data().premiumExpiry) {
+      return new Date(snap.data().premiumExpiry) > new Date();
+    }
+  } catch(e) {}
+  return false;
+}
+
+onAuthStateChanged(auth, async user => {
+  if (user) {
+    const name = user.displayName || user.email.split('@')[0];
+    const initial = name[0].toUpperCase();
+
+    // Nav
+    document.getElementById('navGuest').style.display = 'none';
+    document.getElementById('navUser').style.display = 'block';
+    document.getElementById('navAvatar').textContent = initial;
+    document.getElementById('navName').textContent = name;
+    document.getElementById('dropName').textContent = name;
+    document.getElementById('dropEmail').textContent = user.email;
+
+    // Hero strip
+    document.getElementById('heroAuthStrip').style.display = 'flex';
+    document.getElementById('heroAvatar').textContent = initial;
+    document.getElementById('heroName').textContent = name;
+
+    // Premium check
+    const isPrem = await checkPremiumStatus(user);
+    if (isPrem) {
+      document.getElementById('navPremiumDot').style.display = 'block';
+      document.getElementById('dropPlan').textContent = '⭐ Premium';
+      document.getElementById('dropPlan').classList.remove('free');
+      document.getElementById('heroPremiumBadge').style.display = 'inline-flex';
+      // Toast
+      if (!premiumShown) {
+        premiumShown = true;
+        const toast = document.getElementById('premiumToast');
+        toast.textContent = `⭐ Bienvenue ${name}, membre Premium !`;
+        toast.classList.add('show');
+        setTimeout(() => toast.classList.remove('show'), 4000);
+      }
+    }
+    closeAuth();
+  } else {
+    document.getElementById('navGuest').style.display = 'flex';
+    document.getElementById('navUser').style.display = 'none';
+    document.getElementById('heroAuthStrip').style.display = 'none';
+  }
+});
+
+window.loginUser = async () => {
+  const email = document.getElementById('loginEmail').value.trim();
+  const pass = document.getElementById('loginPass').value;
+  const msg = document.getElementById('loginMsg');
+  const btn = document.getElementById('loginBtn');
+  if (!email || !pass) { msg.style.color='#ef4444'; msg.textContent='Remplis tous les champs.'; return; }
+  btn.disabled = true; btn.textContent = 'Connexion…';
+  try {
+    await signInWithEmailAndPassword(auth, email, pass);
+    msg.textContent = '';
+  } catch(e) {
+    msg.style.color = '#ef4444';
+    msg.textContent = e.code === 'auth/invalid-credential' ? '❌ Email ou mot de passe incorrect.' : '❌ Erreur. Réessaie.';
+  }
+  btn.disabled = false; btn.textContent = 'Se connecter';
+};
+
+window.signupUser = async () => {
+  const name = document.getElementById('signupName').value.trim();
+  const email = document.getElementById('signupEmail').value.trim();
+  const pass = document.getElementById('signupPass').value;
+  const msg = document.getElementById('signupMsg');
+  const btn = document.getElementById('signupBtn');
+  if (!name || !email || !pass) { msg.style.color='#ef4444'; msg.textContent='Remplis tous les champs.'; return; }
+  if (pass.length < 6) { msg.style.color='#ef4444'; msg.textContent='Mot de passe trop court (6 min).'; return; }
+  btn.disabled = true; btn.textContent = 'Création…';
+  try {
+    const cred = await createUserWithEmailAndPassword(auth, email, pass);
+    await updateProfile(cred.user, { displayName: name });
+    msg.textContent = '';
+  } catch(e) {
+    msg.style.color = '#ef4444';
+    msg.textContent = e.code === 'auth/email-already-in-use' ? '❌ Email déjà utilisé.' : '❌ Erreur. Réessaie.';
+  }
+  btn.disabled = false; btn.textContent = 'Créer mon compte';
+};
+
+window.loginGoogle = async () => {
+  try { await signInWithPopup(auth, gProvider); closeAuth(); } catch(e) { console.error(e); }
+};
+
+window.logoutUser = async () => {
+  await signOut(auth);
+  localStorage.removeItem('premiumCode');
+  localStorage.removeItem('premiumExpiry');
+  document.getElementById('userDropdown').classList.remove('open');
+};
+</script>
 </body>
 </html>
