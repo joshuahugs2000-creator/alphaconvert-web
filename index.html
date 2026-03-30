@@ -3,217 +3,677 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AlphaConvert — Téléchargeur YouTube & TikTok</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
+<title>AlphaConvert — Admin</title>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'Plus Jakarta Sans',sans-serif; background:#0f0f1a; color:#e5e7eb; height:100vh; display:flex; flex-direction:column; }
+
+/* LOGIN */
+#loginScreen { position:fixed; inset:0; background:#0f0f1a; display:flex; align-items:center; justify-content:center; z-index:999; }
+.login-box { background:#1a1a2e; border:1.5px solid #2a2a3e; border-radius:16px; padding:2.5rem; width:100%; max-width:380px; text-align:center; }
+.login-box h2 { font-size:1.3rem; font-weight:800; margin-bottom:0.4rem; }
+.login-box p { color:#6b7280; font-size:0.85rem; margin-bottom:1.5rem; }
+.login-input { width:100%; background:#0f0f1a; border:1.5px solid #2a2a3e; border-radius:10px; padding:0.8rem 1rem; font-size:0.9rem; font-family:inherit; color:#e5e7eb; outline:none; margin-bottom:1rem; }
+.login-input:focus { border-color:#4f46e5; }
+.login-btn { width:100%; padding:0.9rem; background:#4f46e5; color:#fff; border:none; border-radius:10px; font-size:0.95rem; font-weight:700; cursor:pointer; font-family:inherit; }
+.login-btn:hover { background:#4338ca; }
+.login-error { color:#f87171; font-size:0.82rem; margin-top:0.5rem; display:none; }
+
+/* LAYOUT */
+.app { display:flex; height:100vh; }
+
+/* SIDEBAR */
+.sidebar { width:300px; background:#1a1a2e; border-right:1px solid #2a2a3e; display:flex; flex-direction:column; flex-shrink:0; overflow:hidden; }
+.sidebar-header { padding:1rem 1.2rem; border-bottom:1px solid #2a2a3e; display:flex; align-items:center; justify-content:space-between; flex-shrink:0; }
+.sidebar-title { font-weight:800; font-size:0.95rem; }
+.notif-badge { background:#ef4444; color:#fff; font-size:0.7rem; font-weight:700; padding:0.15rem 0.5rem; border-radius:100px; }
+.sidebar-tabs { display:flex; border-bottom:1px solid #2a2a3e; flex-shrink:0; }
+.s-tab { flex:1; padding:0.6rem; font-size:0.8rem; font-weight:700; cursor:pointer; border:none; background:none; color:#6b7280; font-family:inherit; transition:all 0.15s; border-bottom:2px solid transparent; }
+.s-tab.active { color:#a5b4fc; border-bottom-color:#4f46e5; }
+.sidebar-content { flex:1; overflow-y:auto; }
+
+/* SESSIONS */
+.sessions-list { }
+.session-item { padding:1rem 1.2rem; border-bottom:1px solid #2a2a3e; cursor:pointer; transition:background 0.15s; }
+.session-item:hover { background:#252538; }
+.session-item.active { background:#252538; border-left:3px solid #4f46e5; }
+.session-item.unread { border-left:3px solid #ef4444; }
+.session-name { font-weight:700; font-size:0.88rem; margin-bottom:0.2rem; display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap; }
+.session-plan { background:#ede9fe; color:#4f46e5; font-size:0.7rem; font-weight:700; padding:0.1rem 0.5rem; border-radius:4px; }
+.session-preview { font-size:0.78rem; color:#6b7280; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.session-time { font-size:0.7rem; color:#4b5563; margin-top:0.2rem; }
+.unread-dot { width:8px; height:8px; border-radius:50%; background:#ef4444; flex-shrink:0; }
+.empty-sessions { padding:2rem; text-align:center; color:#4b5563; font-size:0.85rem; }
+
+/* CODES PANEL */
+.codes-panel { padding:1rem 1.2rem; }
+.codes-panel-title { font-size:0.78rem; font-weight:700; color:#9ca3af; margin-bottom:0.8rem; letter-spacing:0.05em; }
+.code-gen-row { display:flex; flex-direction:column; gap:0.5rem; margin-bottom:0.8rem; }
+.code-select { width:100%; background:#0f0f1a; border:1.5px solid #2a2a3e; border-radius:8px; padding:0.5rem 0.7rem; font-size:0.82rem; font-family:inherit; color:#e5e7eb; outline:none; }
+.code-select:focus { border-color:#4f46e5; }
+.gen-btn { width:100%; padding:0.6rem; background:#f59e0b; color:#000; border:none; border-radius:8px; font-size:0.82rem; font-weight:700; cursor:pointer; font-family:inherit; }
+.gen-btn:hover { background:#d97706; }
+.generated-code-box { display:none; background:#0f0f1a; border:1.5px solid #f59e0b; border-radius:8px; padding:0.8rem; text-align:center; margin-bottom:0.8rem; }
+.code-val { font-size:0.95rem; font-weight:800; color:#f59e0b; letter-spacing:2px; cursor:pointer; }
+.code-val:hover { color:#fbbf24; }
+.code-meta { font-size:0.7rem; color:#6b7280; margin-top:0.3rem; }
+.copy-ok { font-size:0.7rem; color:#10b981; margin-top:0.2rem; display:none; }
+.codes-divider { height:1px; background:#2a2a3e; margin:0.8rem 0; }
+.codes-list-title { font-size:0.75rem; font-weight:700; color:#6b7280; margin-bottom:0.6rem; display:flex; align-items:center; justify-content:space-between; }
+.code-entry { background:#0f0f1a; border:1px solid #2a2a3e; border-radius:8px; padding:0.6rem 0.8rem; margin-bottom:0.4rem; }
+.code-entry-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:0.25rem; }
+.code-entry-val { font-size:0.8rem; font-weight:700; color:#e5e7eb; letter-spacing:1px; }
+.code-entry-badge { font-size:0.65rem; font-weight:700; padding:0.15rem 0.5rem; border-radius:4px; }
+.badge-active { background:#dcfce7; color:#166534; }
+.badge-used { background:#fee2e2; color:#991b1b; }
+.badge-expired { background:#f3f4f6; color:#6b7280; }
+.badge-revoked { background:#fef3c7; color:#92400e; }
+.badge-unlimited { background:#ede9fe; color:#4f46e5; }
+.code-entry-meta { font-size:0.7rem; color:#6b7280; }
+.code-entry-actions { display:flex; gap:0.4rem; margin-top:0.4rem; }
+.code-action-btn { font-size:0.7rem; font-weight:700; padding:0.2rem 0.5rem; border-radius:4px; cursor:pointer; border:none; font-family:inherit; }
+.revoke-btn-sm { background:#fee2e2; color:#991b1b; }
+.revoke-btn-sm:hover { background:#fecaca; }
+.copy-btn-sm { background:#ede9fe; color:#4f46e5; }
+.copy-btn-sm:hover { background:#ddd6fe; }
+
+/* MAIN CHAT */
+.main { flex:1; display:flex; flex-direction:column; overflow:hidden; }
+.main-empty { flex:1; display:flex; align-items:center; justify-content:center; color:#4b5563; font-size:0.9rem; text-align:center; }
+.chat-header { padding:1rem 1.5rem; border-bottom:1px solid #2a2a3e; background:#1a1a2e; display:flex; align-items:center; gap:0.8rem; flex-wrap:wrap; flex-shrink:0; }
+.client-avatar { width:38px; height:38px; border-radius:10px; background:linear-gradient(135deg,#6b7280,#374151); display:flex; align-items:center; justify-content:center; font-size:1.1rem; flex-shrink:0; }
+.client-name { font-weight:700; font-size:0.95rem; }
+.client-plan { font-size:0.78rem; color:#9ca3af; }
+.expiry-info { font-size:0.72rem; color:#6ee7b7; margin-top:0.1rem; }
+.status-badge { margin-left:auto; display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap; }
+.badge { font-size:0.72rem; font-weight:700; padding:0.25rem 0.7rem; border-radius:100px; }
+.badge-waiting { background:#fef3c7; color:#92400e; }
+.badge-active-hdr { background:#dcfce7; color:#166534; }
+.activate-btn { background:#10b981; color:#fff; border:none; border-radius:8px; padding:0.4rem 0.9rem; font-size:0.78rem; font-weight:700; cursor:pointer; font-family:inherit; }
+.activate-btn:hover { background:#059669; }
+.remove-btn { background:#ef4444; color:#fff; border:none; border-radius:8px; padding:0.4rem 0.9rem; font-size:0.78rem; font-weight:700; cursor:pointer; font-family:inherit; }
+.remove-btn:hover { background:#dc2626; }
+.chat-messages { flex:1; overflow-y:auto; padding:1.2rem; display:flex; flex-direction:column; gap:0.8rem; }
+.msg { display:flex; gap:0.6rem; align-items:flex-end; max-width:75%; }
+.msg.client { align-self:flex-start; }
+.msg.admin { align-self:flex-end; flex-direction:row-reverse; }
+.msg-avatar { width:28px; height:28px; border-radius:8px; display:flex; align-items:center; justify-content:center; color:#fff; font-size:0.75rem; flex-shrink:0; }
+.client-av { background:linear-gradient(135deg,#6b7280,#374151); }
+.admin-av { background:linear-gradient(135deg,#4f46e5,#7c3aed); }
+.msg-bubble { padding:0.7rem 0.9rem; border-radius:12px; font-size:0.875rem; line-height:1.5; }
+.msg.client .msg-bubble { background:#252538; color:#e5e7eb; border-bottom-left-radius:4px; }
+.msg.admin .msg-bubble { background:#4f46e5; color:#fff; border-bottom-right-radius:4px; }
+.msg-time { font-size:0.7rem; color:#4b5563; margin-top:3px; }
+.msg.admin .msg-time { text-align:right; }
+.input-area { padding:1rem 1.2rem; border-top:1px solid #2a2a3e; background:#1a1a2e; display:flex; gap:0.6rem; flex-shrink:0; }
+.admin-input { flex:1; background:#0f0f1a; border:1.5px solid #2a2a3e; border-radius:10px; padding:0.7rem 1rem; font-size:0.88rem; font-family:inherit; color:#e5e7eb; outline:none; resize:none; }
+.admin-input:focus { border-color:#4f46e5; }
+.send-btn { background:#4f46e5; color:#fff; border:none; border-radius:10px; padding:0.7rem 1.2rem; cursor:pointer; font-size:0.85rem; font-weight:700; font-family:inherit; white-space:nowrap; }
+.quick-btns { padding:0.5rem 1.2rem 0; display:flex; gap:0.5rem; flex-wrap:wrap; flex-shrink:0; }
+.qb { background:#252538; border:1px solid #2a2a3e; color:#9ca3af; font-size:0.75rem; font-weight:600; padding:0.3rem 0.7rem; border-radius:6px; cursor:pointer; font-family:inherit; }
+.qb:hover { border-color:#4f46e5; color:#a5b4fc; }
+
+/* MODAL ACTIVATION */
+.modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.75); display:flex; align-items:center; justify-content:center; z-index:1000; }
+.modal-box { background:#1a1a2e; border:1.5px solid #2a2a3e; border-radius:16px; padding:2rem; width:100%; max-width:440px; }
+.modal-box h3 { font-size:1.1rem; font-weight:800; margin-bottom:0.4rem; }
+.modal-box p { color:#6b7280; font-size:0.85rem; margin-bottom:1.5rem; }
+.plan-options { display:grid; grid-template-columns:1fr 1fr; gap:0.8rem; margin-bottom:1.5rem; }
+.plan-option { background:#0f0f1a; border:2px solid #2a2a3e; border-radius:12px; padding:1rem; cursor:pointer; text-align:center; transition:all 0.15s; }
+.plan-option:hover { border-color:#4f46e5; }
+.plan-option.selected { border-color:#10b981; background:#052e16; }
+.plan-dur { font-weight:800; font-size:1rem; margin-bottom:0.3rem; }
+.plan-exp { font-size:0.7rem; color:#6b7280; }
+.plan-option.selected .plan-exp { color:#6ee7b7; }
+.modal-actions { display:flex; gap:0.8rem; }
+.modal-confirm { flex:1; padding:0.8rem; background:#10b981; color:#fff; border:none; border-radius:10px; font-size:0.9rem; font-weight:700; cursor:pointer; font-family:inherit; }
+.modal-confirm:disabled { background:#374151; cursor:not-allowed; }
+.modal-cancel { padding:0.8rem 1.2rem; background:#252538; color:#9ca3af; border:none; border-radius:10px; font-size:0.9rem; font-weight:700; cursor:pointer; font-family:inherit; }
+
+/* MODAL CONFIRMATION */
+.confirm-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.75); display:flex; align-items:center; justify-content:center; z-index:1001; }
+.confirm-box { background:#1a1a2e; border:1.5px solid #ef4444; border-radius:16px; padding:1.8rem; width:100%; max-width:360px; text-align:center; }
+.confirm-box h3 { font-size:1rem; font-weight:800; margin-bottom:0.5rem; }
+.confirm-box p { color:#6b7280; font-size:0.85rem; margin-bottom:1.5rem; }
+.confirm-actions { display:flex; gap:0.8rem; }
+.confirm-yes { flex:1; padding:0.75rem; background:#ef4444; color:#fff; border:none; border-radius:10px; font-size:0.88rem; font-weight:700; cursor:pointer; font-family:inherit; }
+.confirm-no { flex:1; padding:0.75rem; background:#252538; color:#9ca3af; border:none; border-radius:10px; font-size:0.88rem; font-weight:700; cursor:pointer; font-family:inherit; }
+</style>
 </head>
 <body>
 
-<!-- NAV -->
-<nav>
-  <a href="/" class="logo">
-    <div class="logo-icon">⬇</div>
-    Alpha<span>Convert</span>
-  </a>
-  <button class="hamburger" id="hamburger" onclick="toggleMenu()" aria-label="Menu"><span></span><span></span><span></span></button>
-  <div class="nav-links" id="navLinks">
-    <a href="#features">Fonctionnalités</a>
-    <a href="#how">Comment ça marche</a>
-    <a href="premium.html" style="color:#f59e0b;font-weight:700">⭐ Premium</a>
-    <a href="https://t.me/alphaconvert_bot" class="nav-btn">Bot Telegram</a>
-  </div>
-</nav>
-
-<!-- HERO -->
-<section class="hero">
-  <div class="hero-badge">
-    <span class="hero-badge-dot"></span>
-    Gratuit · Sans inscription · Illimité
-  </div>
-  <!-- STATUT PREMIUM / COMPTEUR -->
-  <div id="premiumBadge" style="display:none; font-size:0.82rem; font-weight:700; margin-bottom:0.5rem;"></div>
-  <div id="dlCounter" style="display:none; font-size:0.78rem; margin-bottom:0.5rem;"></div>
-  <h1>Télécharge depuis <span style="color:#ff0000">YouTube</span><br>&amp; <span style="color:#69c9d0">TikTok</span></h1>
-  <p class="hero-sub">Colle ton lien, choisis le format — MP4 ou MP3 — et télécharge instantanément.</p>
-
-  <!-- MAIN CARD -->
-  <div class="main-card">
-    <div class="tabs">
-      <button class="tab active" onclick="switchTab(this,'yt')">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="#ff0000"><path d="M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.5 12 3.5 12 3.5s-7.5 0-9.4.6A3 3 0 0 0 .5 6.2C0 8.1 0 12 0 12s0 3.9.5 5.8a3 3 0 0 0 2.1 2.1c1.9.6 9.4.6 9.4.6s7.5 0 9.4-.6a3 3 0 0 0 2.1-2.1C24 15.9 24 12 24 12s0-3.9-.5-5.8z"/><path d="M9.8 15.5V8.5l6.3 3.5-6.3 3.5z" fill="#fff"/></svg>
-        YouTube
-      </button>
-      
-      <button class="tab" onclick="switchTab(this,'tt')">
-        <svg width="16" height="16" viewBox="0 0 24 24"><path d="M19.6 3.3A4.9 4.9 0 0 1 14.7 0h-3.6v16.4a2.9 2.9 0 0 1-2.9 2.5 2.9 2.9 0 0 1-2.9-2.9 2.9 2.9 0 0 1 2.9-2.9c.3 0 .5 0 .8.1V9.5a6.5 6.5 0 0 0-.8-.1 6.5 6.5 0 0 0-6.5 6.5 6.5 6.5 0 0 0 6.5 6.5 6.5 6.5 0 0 0 6.5-6.5V8.2a8.4 8.4 0 0 0 4.9 1.6V6.2a4.9 4.9 0 0 1-3.1-2.9z" fill="#010101" stroke="#69c9d0" stroke-width="0.5"/></svg>
-        TikTok
-      </button>
-    </div>
-
-    <div class="input-zone">
-      <div class="url-row">
-        <input class="url-input" id="urlInput" type="url"
-          placeholder="Colle ton lien YouTube ici…">
-        <button class="go-btn" onclick="analyze()">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-            <polyline points="7 10 12 15 17 10"/>
-            <line x1="12" y1="15" x2="12" y2="3"/>
-          </svg>
-          Télécharger
-        </button>
-      </div>
-
-      <div class="fmt-label">Format de téléchargement</div>
-      <div class="format-row">
-        <div class="fmt-chip selected" data-fmt="mp4" data-q="1080" onclick="selectFmt(this)">MP4 1080p HD</div>
-        <div class="fmt-chip" data-fmt="mp4" data-q="720"  onclick="selectFmt(this)">MP4 720p</div>
-        <div class="fmt-chip" data-fmt="mp4" data-q="480"  onclick="selectFmt(this)">MP4 480p</div>
-        <div class="fmt-chip" data-fmt="mp4" data-q="360"  onclick="selectFmt(this)">MP4 360p</div>
-        <div class="fmt-chip" data-fmt="mp3" data-q="best" onclick="selectFmt(this)">MP3 Audio</div>
-      </div>
-
-      <!-- Loader -->
-      <div class="loader-row" id="loader">
-        <div class="spin"></div>
-        <span id="loaderText">Analyse du lien en cours…</span>
-      </div>
-
-      <!-- Résultat -->
-      <div class="result-row" id="resultRow">
-        <div class="result-thumb">
-          <img id="rThumb" src="" alt="">
-        </div>
-        <div class="result-info">
-          <div class="result-title" id="rTitle">—</div>
-          <div class="result-meta" id="rMeta">—</div>
-          <div class="dl-grid" id="dlGrid"></div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Platform badges -->
-  <div class="platforms-strip">
-    <div class="p-badge"><span class="p-dot" style="background:#ff0000"></span> YouTube</div>
-    <div class="p-badge"><span class="p-dot" style="background:#010101;outline:1px solid #69c9d0"></span> TikTok</div>
-    <div class="p-badge"><span class="p-dot" style="background:#4f46e5"></span> MP3 Audio</div>
-  </div>
-</section>
-
-<!-- FEATURES -->
-<section class="features" id="features">
-  <div class="features-inner">
-    <div class="section-head">
-      <h2>Tout ce dont tu as besoin</h2>
-      <p>Simple, rapide et gratuit — aucune limite cachée.</p>
-    </div>
-    <div class="feat-grid">
-      <div class="feat-card">
-        <div class="feat-icon" style="background:#fee2e2">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="#ff0000"><path d="M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.5 12 3.5 12 3.5s-7.5 0-9.4.6A3 3 0 0 0 .5 6.2C0 8.1 0 12 0 12s0 3.9.5 5.8a3 3 0 0 0 2.1 2.1c1.9.6 9.4.6 9.4.6s7.5 0 9.4-.6a3 3 0 0 0 2.1-2.1C24 15.9 24 12 24 12s0-3.9-.5-5.8z"/><path d="M9.8 15.5V8.5l6.3 3.5-6.3 3.5z" fill="#fff"/></svg>
-        </div>
-        <h3>YouTube jusqu'à 1080p</h3>
-        <p>Télécharge en 360p, 480p, 720p ou 1080p HD. Audio séparé en MP3 192kbps.</p>
-      </div>
-      
-  </div>
-</section>
-
-<!-- HOW IT WORKS -->
-<section class="how" id="how">
-  <div class="how-inner">
-    <div class="section-head">
-      <h2>Comment ça marche</h2>
-      <p>3 étapes, 0 complication.</p>
-    </div>
-    <div class="steps-row">
-      <div class="step">
-        <div class="step-num">1</div>
-        <h4>Copie le lien</h4>
-        <p>Sur YouTube ou TikTok — appuie sur "Partager" et copie l'URL.</p>
-      </div>
-      <div class="step">
-        <div class="step-num">2</div>
-        <h4>Choisis le format</h4>
-        <p>Sélectionne MP4 ou MP3 et la qualité souhaitée.</p>
-      </div>
-      <div class="step">
-        <div class="step-num">3</div>
-        <h4>Télécharge</h4>
-        <p>Clique sur Télécharger. Le fichier est prêt en quelques secondes.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- TELEGRAM BANNER -->
-<div style="padding: 0 2rem 4rem; max-width:1100px; margin:0 auto;">
-  <div class="tg-banner">
-    <div style="font-size:2.5rem">✈️</div>
-    <div class="tg-banner-text">
-      <h3>Disponible aussi sur Telegram</h3>
-      <p>Envoie directement tes liens sur notre bot Telegram — depuis ton téléphone, en 2 secondes.</p>
-    </div>
-    <a href="https://t.me/alphaconvert_bot" class="tg-link">Ouvrir le bot →</a>
+<!-- LOGIN -->
+<div id="loginScreen">
+  <div class="login-box">
+    <h2>👑 Admin AlphaConvert</h2>
+    <p>Panneau de gestion Premium</p>
+    <input class="login-input" type="password" id="adminPassword" placeholder="Mot de passe admin">
+    <button class="login-btn" onclick="login()">Se connecter</button>
+    <div class="login-error" id="loginError">Mot de passe incorrect</div>
   </div>
 </div>
 
-<!-- FOOTER -->
-<footer>
-  <p style="margin-bottom:0.5rem">
-    <strong style="color:#fff">AlphaConvert</strong> — Téléchargeur YouTube &amp; TikTok
-  </p>
-  <p>© 2026 · <a href="#">Confidentialité</a> · <a href="#">Conditions</a></p>
-</footer>
-
-<!-- MODAL LIMITE ATTEINTE -->
-<div id="limitModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.75); z-index:1000; align-items:center; justify-content:center;">
-  <div style="background:#1a1a2e; border:1.5px solid #2a2a3e; border-radius:16px; padding:2rem; max-width:400px; width:90%; text-align:center;">
-    <div style="font-size:2.5rem; margin-bottom:1rem">🚫</div>
-    <h3 style="font-size:1.1rem; font-weight:800; margin-bottom:0.5rem; color:#fff">Limite atteinte</h3>
-    <p style="color:#6b7280; font-size:0.85rem; margin-bottom:1.5rem">Tu as utilisé tes 3 téléchargements gratuits d'aujourd'hui. Reviens demain ou active un accès Premium.</p>
-    <div style="display:flex; gap:0.8rem; justify-content:center;">
-      <button onclick="closeLimitModal()" style="padding:0.7rem 1.2rem; background:#252538; color:#9ca3af; border:none; border-radius:10px; font-size:0.88rem; font-weight:700; cursor:pointer; font-family:inherit;">Fermer</button>
-      <button onclick="openCodeModal()" style="padding:0.7rem 1.4rem; background:#f59e0b; color:#000; border:none; border-radius:10px; font-size:0.88rem; font-weight:700; cursor:pointer; font-family:inherit;">⭐ J'ai un code Premium</button>
+<!-- MODAL ACTIVATION -->
+<div class="modal-overlay" id="activateModal" style="display:none;">
+  <div class="modal-box">
+    <h3>⚡ Activer le Premium</h3>
+    <p>Choisis la durée pour ce client :</p>
+    <div class="plan-options">
+      <div class="plan-option" onclick="selectPlanModal(this,1)" id="opt-1">
+        <div class="plan-dur">1 Mois</div>
+        <div class="plan-exp" id="exp-1">—</div>
+      </div>
+      <div class="plan-option" onclick="selectPlanModal(this,3)" id="opt-3">
+        <div class="plan-dur">3 Mois</div>
+        <div class="plan-exp" id="exp-3">—</div>
+      </div>
+      <div class="plan-option" onclick="selectPlanModal(this,6)" id="opt-6">
+        <div class="plan-dur">6 Mois</div>
+        <div class="plan-exp" id="exp-6">—</div>
+      </div>
+      <div class="plan-option" onclick="selectPlanModal(this,12)" id="opt-12">
+        <div class="plan-dur">1 An</div>
+        <div class="plan-exp" id="exp-12">—</div>
+      </div>
+      <div class="plan-option" onclick="selectPlanModal(this,0)" id="opt-0" style="grid-column:span 2;">
+        <div class="plan-dur">♾️ Illimité</div>
+        <div class="plan-exp" id="exp-0">Accès permanent</div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="modal-cancel" onclick="closeActivateModal()">Annuler</button>
+      <button class="modal-confirm" id="confirmBtn" onclick="confirmActivation()" disabled>✅ Confirmer</button>
     </div>
   </div>
 </div>
 
-<!-- MODAL CODE PREMIUM -->
-<div id="codeModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.75); z-index:1000; align-items:center; justify-content:center;">
-  <div style="background:#1a1a2e; border:1.5px solid #f59e0b; border-radius:16px; padding:2rem; max-width:400px; width:90%; text-align:center;">
-    <div style="font-size:2.5rem; margin-bottom:0.8rem">⭐</div>
-    <h3 style="font-size:1.1rem; font-weight:800; margin-bottom:0.4rem; color:#fff">Activer Premium</h3>
-    <p style="color:#6b7280; font-size:0.85rem; margin-bottom:1.2rem">Entre ton code d'accès reçu après paiement.</p>
-    <input id="codeInput" type="text" placeholder="Ex: ALPHA-X7K2-9QMP"
-      style="width:100%; background:#0f0f1a; border:1.5px solid #2a2a3e; border-radius:10px; padding:0.8rem 1rem; font-size:0.95rem; font-family:inherit; color:#fff; outline:none; text-align:center; letter-spacing:2px; margin-bottom:0.8rem; text-transform:uppercase;"
-      onkeydown="if(event.key==='Enter') activateCode()">
-    <div id="codeMsg" style="font-size:0.82rem; min-height:1.2rem; margin-bottom:1rem;"></div>
-    <div style="display:flex; gap:0.8rem; justify-content:center;">
-      <button onclick="closeCodeModal()" style="padding:0.7rem 1.2rem; background:#252538; color:#9ca3af; border:none; border-radius:10px; font-size:0.88rem; font-weight:700; cursor:pointer; font-family:inherit;">Annuler</button>
-      <button id="activateBtn" onclick="activateCode()" style="padding:0.7rem 1.4rem; background:#f59e0b; color:#000; border:none; border-radius:10px; font-size:0.88rem; font-weight:700; cursor:pointer; font-family:inherit;">Activer</button>
+<!-- MODAL CONFIRMATION RÉVOCATION -->
+<div class="confirm-overlay" id="revokeConfirm" style="display:none;">
+  <div class="confirm-box">
+    <h3>⚠️ Révoquer ce code ?</h3>
+    <p>Le code sera désactivé immédiatement. Cette action est irréversible.</p>
+    <div class="confirm-actions">
+      <button class="confirm-no" onclick="closeRevokeConfirm()">Annuler</button>
+      <button class="confirm-yes" onclick="doRevoke()">Révoquer</button>
     </div>
-    <p style="margin-top:1rem; font-size:0.75rem; color:#4b5563;">Pas encore Premium ? <a href="premium.html" style="color:#f59e0b;">Voir les offres →</a></p>
   </div>
 </div>
 
+<!-- APP -->
+<div class="app" id="app" style="display:none;">
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <span class="sidebar-title">👑 Admin AlphaConvert</span>
+      <span class="notif-badge" id="notifBadge" style="display:none">0</span>
+    </div>
+    <div class="sidebar-tabs">
+      <button class="s-tab active" id="tabMsg" onclick="switchSideTab('messages')">💬 Messages</button>
+      <button class="s-tab" id="tabCodes" onclick="switchSideTab('codes')">🔑 Codes</button>
+    </div>
+    <div class="sidebar-content">
+      <!-- MESSAGES TAB -->
+      <div id="tabMessagesContent">
+        <div class="sessions-list" id="sessionsList">
+          <div class="empty-sessions">Aucune demande pour l'instant</div>
+        </div>
+      </div>
+      <!-- CODES TAB -->
+      <div id="tabCodesContent" style="display:none;">
+        <div class="codes-panel">
+          <div class="codes-panel-title">🔑 GÉNÉRER UN CODE PREMIUM</div>
+          <div class="code-gen-row">
+            <select id="codeDuration" class="code-select">
+              <option value="1">1 Mois — 5$</option>
+              <option value="3">3 Mois — 12$</option>
+              <option value="6">6 Mois — 20$</option>
+              <option value="12">1 An — 35$</option>
+              <option value="0">♾️ Illimité</option>
+            </select>
+            <button class="gen-btn" onclick="generateCode()">⚡ Générer le code</button>
+          </div>
+          <div id="generatedCodeBox" class="generated-code-box">
+            <div style="font-size:0.7rem; color:#9ca3af; margin-bottom:0.3rem;">Code généré — clique pour copier :</div>
+            <div id="codeVal" class="code-val" onclick="copyGeneratedCode()" title="Copier"></div>
+            <div id="codeMeta" class="code-meta"></div>
+            <div id="copyOk" class="copy-ok">✅ Copié !</div>
+          </div>
+          <div class="codes-divider"></div>
+          <div class="codes-list-title">
+            <span>Codes générés</span>
+            <span id="codesCount" style="color:#4b5563;">0</span>
+          </div>
+          <div id="codesList"></div>
+        </div>
+      </div>
+    </div>
+  </div>
 
-<script>
-function toggleMenu() {
-  document.getElementById('navLinks').classList.toggle('open');
-  document.getElementById('hamburger').classList.toggle('open');
-}
-document.addEventListener('DOMContentLoaded', function() {
-  document.querySelectorAll('#navLinks a').forEach(function(a) {
-    a.addEventListener('click', function() {
-      document.getElementById('navLinks').classList.remove('open');
-      document.getElementById('hamburger').classList.remove('open');
-    });
-  });
+  <div class="main">
+    <div class="main-empty" id="mainEmpty">
+      <div>
+        <div style="font-size:3rem;margin-bottom:1rem">💬</div>
+        <div>Sélectionne une conversation<br><span style="font-size:0.8rem;color:#374151;">ou génère un code dans l'onglet Codes</span></div>
+      </div>
+    </div>
+    <div id="chatArea" style="display:none; flex-direction:column; flex:1; overflow:hidden;">
+      <div class="chat-header" id="chatHeader"></div>
+      <div class="quick-btns" id="quickBtns"></div>
+      <div class="chat-messages" id="chatMessages"></div>
+      <div class="input-area">
+        <textarea class="admin-input" id="adminInput" rows="2" placeholder="Répondre…"></textarea>
+        <button class="send-btn" onclick="sendReply()">Envoyer</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, collection, addDoc, onSnapshot, query, orderBy,
+         serverTimestamp, doc, setDoc, updateDoc, getDoc, getDocs, deleteDoc }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBJgtQp4ZrOPuUhmwiQw6FmOvt7nywudOc",
+  authDomain: "alphaconvert-d6d65.firebaseapp.com",
+  projectId: "alphaconvert-d6d65",
+  storageBucket: "alphaconvert-d6d65.firebasestorage.app",
+  messagingSenderId: "599445275974",
+  appId: "1:599445275974:web:9c19afd3c4f8219e3f9147"
+};
+
+const ADMIN_PASSWORD = 'alphaadmin2026';
+const fbApp = initializeApp(firebaseConfig);
+const db = getFirestore(fbApp);
+
+let currentSession = null;
+let msgUnsub = null;
+let sessions = {};
+let selectedMonths = null;
+let codeToRevoke = null;
+
+// ── SIDEBAR TABS ───────────────────────────────────────────
+window.switchSideTab = (tab) => {
+  document.getElementById('tabMsg').classList.toggle('active', tab === 'messages');
+  document.getElementById('tabCodes').classList.toggle('active', tab === 'codes');
+  document.getElementById('tabMessagesContent').style.display = tab === 'messages' ? 'block' : 'none';
+  document.getElementById('tabCodesContent').style.display = tab === 'codes' ? 'block' : 'none';
+  if (tab === 'codes') loadCodesList();
+};
+
+// ── LOGIN ──────────────────────────────────────────────────
+window.login = function() {
+  const pw = document.getElementById('adminPassword').value;
+  if (pw === ADMIN_PASSWORD) {
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('app').style.display = 'flex';
+    requestNotifPermission();
+    startListening();
+  } else {
+    document.getElementById('loginError').style.display = 'block';
+  }
+};
+document.getElementById('adminPassword').addEventListener('keydown', e => {
+  if (e.key === 'Enter') window.login();
 });
+
+// ── NOTIFICATIONS ─────────────────────────────────────────
+let prevUnread = parseInt(sessionStorage.getItem('prevUnread') || '0');
+
+function requestNotifPermission() {
+  if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
+}
+
+function playSound() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.frequency.setValueAtTime(880, ctx.currentTime);
+    osc.frequency.setValueAtTime(660, ctx.currentTime + 0.1);
+    gain.gain.setValueAtTime(0.3, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+    osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.4);
+  } catch(e) {}
+}
+
+function sendBrowserNotif(text) {
+  if ('Notification' in window && Notification.permission === 'granted') {
+    const n = new Notification('💬 Nouveau message — AlphaConvert', { body: text });
+    setTimeout(() => n.close(), 5000);
+  }
+}
+
+// ── FIRESTORE SESSIONS ────────────────────────────────────
+function startListening() {
+  onSnapshot(collection(db, 'sessions'), snapshot => {
+    snapshot.docChanges().forEach(ch => {
+      sessions[ch.doc.id] = { id: ch.doc.id, ...ch.doc.data() };
+    });
+    renderSessions();
+    const unread = Object.values(sessions).filter(s => s.hasNewMessage).length;
+    const badge = document.getElementById('notifBadge');
+    badge.style.display = unread > 0 ? 'inline' : 'none';
+    badge.textContent = unread;
+    document.title = unread > 0 ? `(${unread}) Admin — AlphaConvert` : 'Admin — AlphaConvert';
+    if (unread > prevUnread) {
+      playSound();
+      const newS = Object.values(sessions).filter(s => s.hasNewMessage);
+      const last = newS[newS.length - 1];
+      sendBrowserNotif(last?.lastMessage || 'Un client attend une réponse.');
+    }
+    prevUnread = unread;
+    sessionStorage.setItem('prevUnread', unread);
+  });
+}
+
+// ── SIDEBAR SESSIONS ──────────────────────────────────────
+function renderSessions() {
+  const list = document.getElementById('sessionsList');
+  const sorted = Object.values(sessions).sort((a, b) => {
+    if (a.hasNewMessage && !b.hasNewMessage) return -1;
+    if (!a.hasNewMessage && b.hasNewMessage) return 1;
+    return 0;
+  });
+  if (!sorted.length) {
+    list.innerHTML = '<div class="empty-sessions">Aucune demande pour l\'instant</div>';
+    return;
+  }
+  list.innerHTML = sorted.map(s => {
+    let sub = '⏳ En attente';
+    if (s.status === 'active') {
+      if (s.unlimited) sub = '♾️ Accès illimité';
+      else if (s.expiresAt) sub = `✅ Expire le ${new Date(s.expiresAt).toLocaleDateString('fr')}`;
+    }
+    const name = s.userEmail ? s.userEmail.split('@')[0] : `Client ${s.id.substring(0,6)}`;
+    return `<div class="session-item ${s.id===currentSession?'active':''} ${s.hasNewMessage?'unread':''}" onclick="openSession('${s.id}')">
+      <div class="session-name">👤 ${esc(name)} ${s.hasNewMessage?'<span class="unread-dot"></span>':''}
+        ${s.plan ? `<span class="session-plan">${s.plan}</span>` : ''}
+      </div>
+      <div class="session-preview">${esc(s.lastMessage||'Nouvelle demande')}</div>
+      <div class="session-time">${sub}</div>
+    </div>`;
+  }).join('');
+}
+
+// ── OPEN CHAT ─────────────────────────────────────────────
+window.openSession = async function(sessionId) {
+  currentSession = sessionId;
+  await updateDoc(doc(db, 'sessions', sessionId), { hasNewMessage: false });
+  document.getElementById('mainEmpty').style.display = 'none';
+  const chatArea = document.getElementById('chatArea');
+  chatArea.style.display = 'flex';
+  buildHeader(sessionId);
+  buildQuickBtns();
+  if (msgUnsub) msgUnsub();
+  const q = query(collection(db, 'sessions', sessionId, 'messages'), orderBy('timestamp', 'asc'));
+  msgUnsub = onSnapshot(q, snap => {
+    const c = document.getElementById('chatMessages');
+    c.innerHTML = '';
+    snap.forEach(d => renderMsg(d.data()));
+    c.scrollTop = c.scrollHeight;
+  });
+  renderSessions();
+};
+
+function buildHeader(sessionId) {
+  const s = sessions[sessionId];
+  let expiryLine = '';
+  let btn = '';
+  const name = s.userEmail ? s.userEmail : `Client ${s.id.substring(0,8)}`;
+
+  if (s.status === 'active') {
+    if (s.unlimited) {
+      expiryLine = `<div class="expiry-info">♾️ Accès illimité</div>`;
+    } else if (s.expiresAt) {
+      const exp = new Date(s.expiresAt).toLocaleDateString('fr',{day:'2-digit',month:'long',year:'numeric'});
+      expiryLine = `<div class="expiry-info">📅 ${s.activeDuration||'?'} — expire le ${exp}</div>`;
+    }
+    btn = `<button class="remove-btn" onclick="removePremium('${sessionId}')">❌ Retirer Premium</button>`;
+  } else {
+    btn = `<button class="activate-btn" onclick="openActivateModal('${sessionId}')">⚡ Activer Premium</button>`;
+  }
+
+  document.getElementById('chatHeader').innerHTML = `
+    <div class="client-avatar">👤</div>
+    <div>
+      <div class="client-name">${esc(name)}</div>
+      <div class="client-plan">Plan demandé : ${esc(s.plan||'Non précisé')}</div>
+      ${expiryLine}
+    </div>
+    <div class="status-badge">
+      <span class="badge ${s.status==='active'?'badge-active-hdr':'badge-waiting'}">
+        ${s.status==='active'?'✅ Premium actif':'⏳ En attente'}
+      </span>
+      ${btn}
+    </div>`;
+}
+
+function buildQuickBtns() {
+  document.getElementById('quickBtns').innerHTML = `
+    <button class="qb" onclick="quickReply('Bonjour ! Pour activer votre accès Premium, veuillez effectuer le paiement puis entrer votre code sur la page Premium.')">💳 Infos paiement</button>
+    <button class="qb" onclick="quickReply('Bonjour ! Je suis disponible, comment puis-je vous aider ?')">👋 Saluer</button>
+    <button class="qb" onclick="quickReply('Votre paiement est en cours de vérification, merci de patienter quelques minutes ⏳')">⏳ Vérification</button>
+    <button class="qb" onclick="quickReply('Paiement reçu et vérifié ✅ Je génère votre code d\'accès maintenant !')">✅ Paiement reçu</button>
+  `;
+}
+
+// ── MESSAGES ──────────────────────────────────────────────
+function renderMsg(msg) {
+  const c = document.getElementById('chatMessages');
+  const div = document.createElement('div');
+  const t = msg.timestamp ? new Date(msg.timestamp.toDate()).toLocaleTimeString('fr',{hour:'2-digit',minute:'2-digit'}) : '';
+  const isAdmin = msg.sender === 'admin';
+  div.className = `msg ${isAdmin?'admin':'client'}`;
+  div.innerHTML = `
+    <div class="msg-avatar ${isAdmin?'admin-av':'client-av'}">${isAdmin?'👑':'👤'}</div>
+    <div><div class="msg-bubble">${esc(msg.text)}</div><div class="msg-time">${t}</div></div>`;
+  c.appendChild(div);
+}
+
+window.sendReply = async function() {
+  const input = document.getElementById('adminInput');
+  const text = input.value.trim();
+  if (!text || !currentSession) return;
+  input.value = '';
+  await addDoc(collection(db, 'sessions', currentSession, 'messages'), { text, sender:'admin', timestamp:serverTimestamp() });
+  await setDoc(doc(db,'sessions',currentSession), { lastMessage:'(admin) '+text, hasNewMessage:false }, { merge:true });
+};
+
+window.quickReply = function(text) {
+  document.getElementById('adminInput').value = text;
+  document.getElementById('adminInput').focus();
+};
+
+document.getElementById('adminInput').addEventListener('keydown', e => {
+  if (e.key==='Enter' && !e.shiftKey) { e.preventDefault(); window.sendReply(); }
+});
+
+// ── MODAL ACTIVATION ──────────────────────────────────────
+function calcExpiry(months) {
+  if (months === 0) return null; // illimité
+  const d = new Date();
+  d.setMonth(d.getMonth() + months);
+  return d;
+}
+
+window.openActivateModal = function(sessionId) {
+  currentSession = sessionId;
+  selectedMonths = null;
+  document.getElementById('confirmBtn').disabled = true;
+  document.querySelectorAll('.plan-option').forEach(el => el.classList.remove('selected'));
+
+  [1,3,6,12].forEach(m => {
+    const exp = calcExpiry(m).toLocaleDateString('fr', {day:'2-digit', month:'short', year:'numeric'});
+    document.getElementById(`exp-${m}`).textContent = `Expire le ${exp}`;
+  });
+
+  document.getElementById('activateModal').style.display = 'flex';
+};
+
+window.selectPlanModal = function(el, months) {
+  document.querySelectorAll('.plan-option').forEach(o => o.classList.remove('selected'));
+  el.classList.add('selected');
+  selectedMonths = months;
+  document.getElementById('confirmBtn').disabled = false;
+};
+
+window.closeActivateModal = function() {
+  document.getElementById('activateModal').style.display = 'none';
+  selectedMonths = null;
+};
+
+window.confirmActivation = async function() {
+  if (selectedMonths === null) return;
+  const isUnlimited = selectedMonths === 0;
+  const expiry = isUnlimited ? null : calcExpiry(selectedMonths);
+  const label = isUnlimited ? 'Illimité' : selectedMonths === 12 ? '1 An' : selectedMonths === 1 ? '1 Mois' : `${selectedMonths} Mois`;
+  const expiryStr = isUnlimited ? 'indéfinie' : expiry.toLocaleDateString('fr', {day:'2-digit',month:'long',year:'numeric'});
+
+  await updateDoc(doc(db,'sessions',currentSession), {
+    status: 'active',
+    activeDuration: label,
+    unlimited: isUnlimited,
+    expiresAt: isUnlimited ? null : expiry.toISOString()
+  });
+
+  const msgTxt = isUnlimited
+    ? `🎉 Votre compte Premium Illimité est activé ! Accès permanent sans expiration. Profitez-en !`
+    : `🎉 Votre compte Premium est activé ! Plan : ${label}. Accès valable jusqu'au ${expiryStr}.`;
+
+  await addDoc(collection(db,'sessions',currentSession,'messages'), {
+    text: msgTxt, sender:'admin', timestamp:serverTimestamp()
+  });
+
+  sessions[currentSession] = { ...sessions[currentSession], status:'active', activeDuration:label, unlimited:isUnlimited, expiresAt: isUnlimited ? null : expiry.toISOString() };
+  closeActivateModal();
+  openSession(currentSession);
+};
+
+// ── RETIRER PREMIUM ───────────────────────────────────────
+window.removePremium = async function(sessionId) {
+  if (!confirm('Retirer le Premium de ce client ?')) return;
+  await updateDoc(doc(db,'sessions',sessionId), { status:'waiting', activeDuration:null, expiresAt:null, unlimited:false });
+  await addDoc(collection(db,'sessions',sessionId,'messages'), {
+    text: '⚠️ Votre accès Premium a été désactivé. Contactez-nous si vous pensez que c\'est une erreur.',
+    sender:'admin', timestamp:serverTimestamp()
+  });
+  sessions[sessionId] = { ...sessions[sessionId], status:'waiting', activeDuration:null, expiresAt:null, unlimited:false };
+  openSession(sessionId);
+};
+
+// ── GENERATE CODE ─────────────────────────────────────────
+window.generateCode = async function() {
+  const months = parseInt(document.getElementById('codeDuration').value);
+  const isUnlimited = months === 0;
+
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const rand = (n) => Array.from({length:n}, () => chars[Math.floor(Math.random()*chars.length)]).join('');
+  const code = `ALPHA-${rand(4)}-${rand(4)}`;
+
+  const expiry = isUnlimited ? null : (() => { const d = new Date(); d.setMonth(d.getMonth()+months); return d; })();
+  const label = isUnlimited ? 'Illimité' : months === 12 ? '1 An' : months === 1 ? '1 Mois' : `${months} Mois`;
+
+  await setDoc(doc(db, 'premiumCodes', code), {
+    code, label, months,
+    unlimited: isUnlimited,
+    expiresAt: isUnlimited ? null : expiry.toISOString(),
+    used: false, revoked: false,
+    createdAt: new Date().toISOString()
+  });
+
+  document.getElementById('codeVal').textContent = code;
+  document.getElementById('codeMeta').textContent = isUnlimited
+    ? '♾️ Illimité — sans expiration'
+    : `${label} — expire le ${expiry.toLocaleDateString('fr',{day:'2-digit',month:'long',year:'numeric'})}`;
+  document.getElementById('generatedCodeBox').style.display = 'block';
+  document.getElementById('copyOk').style.display = 'none';
+
+  loadCodesList();
+};
+
+window.copyGeneratedCode = function() {
+  const code = document.getElementById('codeVal').textContent;
+  navigator.clipboard.writeText(code).then(() => {
+    document.getElementById('copyOk').style.display = 'block';
+    setTimeout(() => document.getElementById('copyOk').style.display = 'none', 2000);
+  });
+};
+
+// ── CODES LIST ────────────────────────────────────────────
+async function loadCodesList() {
+  const snap = await getDocs(collection(db, 'premiumCodes'));
+  const codes = [];
+  snap.forEach(d => codes.push(d.data()));
+  codes.sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+  document.getElementById('codesCount').textContent = codes.length;
+
+  const list = document.getElementById('codesList');
+  if (!codes.length) { list.innerHTML = '<div style="color:#4b5563;font-size:0.8rem;text-align:center;padding:1rem;">Aucun code généré</div>'; return; }
+
+  list.innerHTML = codes.map(c => {
+    let badgeClass = 'badge-active';
+    let badgeLabel = '✅ Actif';
+    const now = new Date();
+
+    if (c.revoked) { badgeClass = 'badge-revoked'; badgeLabel = '🚫 Révoqué'; }
+    else if (c.used) { badgeClass = 'badge-used'; badgeLabel = '✔ Utilisé'; }
+    else if (!c.unlimited && c.expiresAt && new Date(c.expiresAt) < now) { badgeClass = 'badge-expired'; badgeLabel = '⌛ Expiré'; }
+    else if (c.unlimited) { badgeClass = 'badge-unlimited'; badgeLabel = '♾️ Illimité'; }
+
+    const expiryText = c.unlimited ? 'Sans expiration' : c.expiresAt ? `Exp: ${new Date(c.expiresAt).toLocaleDateString('fr')}` : '—';
+    const usedText = c.used && c.usedBy ? `Utilisé par: ${c.usedBy}` : '';
+    const canRevoke = !c.revoked && !c.used;
+
+    return `<div class="code-entry">
+      <div class="code-entry-top">
+        <span class="code-entry-val">${c.code}</span>
+        <span class="code-entry-badge ${badgeClass}">${badgeLabel}</span>
+      </div>
+      <div class="code-entry-meta">${c.label} · ${expiryText}${usedText ? ' · '+usedText : ''}</div>
+      <div class="code-entry-actions">
+        <button class="code-action-btn copy-btn-sm" onclick="copyCode('${c.code}')">📋 Copier</button>
+        ${canRevoke ? `<button class="code-action-btn revoke-btn-sm" onclick="confirmRevoke('${c.code}')">🚫 Révoquer</button>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+window.copyCode = function(code) {
+  navigator.clipboard.writeText(code).then(() => {
+    const btn = event.target;
+    btn.textContent = '✅ Copié !';
+    setTimeout(() => btn.textContent = '📋 Copier', 1500);
+  });
+};
+
+// ── RÉVOCATION ────────────────────────────────────────────
+window.confirmRevoke = function(code) {
+  codeToRevoke = code;
+  document.getElementById('revokeConfirm').style.display = 'flex';
+};
+
+window.closeRevokeConfirm = function() {
+  document.getElementById('revokeConfirm').style.display = 'none';
+  codeToRevoke = null;
+};
+
+window.doRevoke = async function() {
+  if (!codeToRevoke) return;
+  await updateDoc(doc(db, 'premiumCodes', codeToRevoke), { revoked: true, revokedAt: new Date().toISOString() });
+  closeRevokeConfirm();
+  loadCodesList();
+};
+
+// ── UTILS ─────────────────────────────────────────────────
+function esc(str) {
+  return (str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+}
 </script>
-<script type="module" src="js/app.js"></script>
 </body>
 </html>
