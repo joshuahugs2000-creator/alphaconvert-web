@@ -1,383 +1,212 @@
-// ── CONFIG ──────────────────────────────────────────────────
-const BACKEND = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-  ? 'http://localhost:8000'
-  : 'https://alphaconvert-web-production-58f7.up.railway.app';
+// AlphaConvert — app.js
+const API = "";  // même origine — Railway sert l'API et le frontend
 
-const DAILY_LIMIT = 3;
+// ── État ──────────────────────────────────────────────────────────────────────
+let currentPlatform = "yt";
+let currentFmt      = "mp4";
+let currentQ        = "1080";
 
-// ── FIREBASE ─────────────────────────────────────────────────
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, doc, getDoc, setDoc, updateDoc, increment, collection }
-  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+// ── Limite gratuite ───────────────────────────────────────────────────────────
+const FREE_LIMIT = 3;
 
-const firebaseConfig = {
-  apiKey: "AIzaSyBJgtQp4ZrOPuUhmwiQw6FmOvt7nywudOc",
-  authDomain: "alphaconvert-d6d65.firebaseapp.com",
-  projectId: "alphaconvert-d6d65",
-  storageBucket: "alphaconvert-d6d65.firebasestorage.app",
-  messagingSenderId: "599445275974",
-  appId: "1:599445275974:web:9c19afd3c4f8219e3f9147"
-};
-const fbApp = initializeApp(firebaseConfig);
-const db = getFirestore(fbApp);
-
-// ── FINGERPRINT ───────────────────────────────────────────────
-function getFingerprint() {
-  const raw = [
-    navigator.userAgent,
-    navigator.language,
-    screen.width + 'x' + screen.height,
-    screen.colorDepth,
-    new Date().getTimezoneOffset(),
-    navigator.hardwareConcurrency || '',
-    navigator.platform || ''
-  ].join('|');
-  // Simple hash
-  let hash = 0;
-  for (let i = 0; i < raw.length; i++) {
-    hash = ((hash << 5) - hash) + raw.charCodeAt(i);
-    hash |= 0;
-  }
-  return Math.abs(hash).toString(36);
+function getTodayKey() {
+  return "dl_" + new Date().toISOString().slice(0, 10);
+}
+function getCount() {
+  return parseInt(localStorage.getItem(getTodayKey()) || "0");
+}
+function incrementCount() {
+  const k = getTodayKey();
+  localStorage.setItem(k, String(getCount() + 1));
+}
+function isPremium() {
+  const code   = localStorage.getItem("premiumCode");
+  const expiry = localStorage.getItem("premiumExpiry");
+  return code && expiry && new Date(expiry) > new Date();
 }
 
-// ── IP ────────────────────────────────────────────────────────
-async function getIP() {
-  try {
-    const r = await fetch('https://api.ipify.org?format=json');
-    const d = await r.json();
-    return d.ip || 'unknown';
-  } catch { return 'unknown'; }
-}
-
-// ── CLIENT ID = fingerprint + ip ─────────────────────────────
-let clientId = null;
-async function getClientId() {
-  if (clientId) return clientId;
-  const fp = getFingerprint();
-  const ip = await getIP();
-  clientId = `${fp}_${ip.replace(/\./g, '-')}`;
-  return clientId;
-}
-
-// ── TODAY KEY ─────────────────────────────────────────────────
-function todayKey() {
-  return new Date().toISOString().split('T')[0]; // ex: "2026-03-17"
-}
-
-// ── PREMIUM CODE CHECK ────────────────────────────────────────
-let isPremium = false;
-let premiumExpiry = null;
-
-async function checkPremiumCode(code) {
-  try {
-    const ref = doc(db, 'premiumCodes', code.toUpperCase().trim());
-    const snap = await getDoc(ref);
-    if (!snap.exists()) return { valid: false, msg: '❌ Code invalide.' };
-    const data = snap.data();
-    if (data.used) return { valid: false, msg: '❌ Ce code a déjà été utilisé.' };
-    const expiry = new Date(data.expiresAt);
-    if (expiry < new Date()) return { valid: false, msg: '❌ Ce code est expiré.' };
-    // Marquer comme utilisé + lier au clientId
-    const cid = await getClientId();
-    await updateDoc(ref, { used: true, usedBy: cid, usedAt: new Date().toISOString() });
-    // Sauvegarder localement
-    localStorage.setItem('premiumCode', code.toUpperCase().trim());
-    localStorage.setItem('premiumExpiry', data.expiresAt);
-    return { valid: true, expiry: data.expiresAt, label: data.label };
-  } catch (e) {
-    return { valid: false, msg: '❌ Erreur de vérification.' };
-  }
-}
-
-async function checkSavedPremium() {
-  const code = localStorage.getItem('premiumCode');
-  const expiry = localStorage.getItem('premiumExpiry');
-  if (!code || !expiry) return false;
-  const exp = new Date(expiry);
-  if (exp < new Date()) {
-    localStorage.removeItem('premiumCode');
-    localStorage.removeItem('premiumExpiry');
-    return false;
-  }
-  // Vérifier que le code existe encore et n'a pas été révoqué
-  try {
-    const ref = doc(db, 'premiumCodes', code);
-    const snap = await getDoc(ref);
-    if (!snap.exists() || snap.data().revoked) {
-      localStorage.removeItem('premiumCode');
-      localStorage.removeItem('premiumExpiry');
-      return false;
-    }
-  } catch { return false; }
-  isPremium = true;
-  premiumExpiry = expiry;
-  return true;
-}
-
-// ── DOWNLOAD LIMIT ────────────────────────────────────────────
-async function canDownload() {
-  if (isPremium) return { allowed: true };
-  const cid = await getClientId();
-  const today = todayKey();
-  const ref = doc(db, 'limits', `${cid}_${today}`);
-  try {
-    const snap = await getDoc(ref);
-    if (!snap.exists()) return { allowed: true, count: 0 };
-    const count = snap.data().count || 0;
-    if (count >= DAILY_LIMIT) return { allowed: false, count };
-    return { allowed: true, count };
-  } catch { return { allowed: true, count: 0 }; }
-}
-
-async function recordDownload() {
-  if (isPremium) return;
-  const cid = await getClientId();
-  const today = todayKey();
-  const ref = doc(db, 'limits', `${cid}_${today}`);
-  try {
-    const snap = await getDoc(ref);
-    if (!snap.exists()) {
-      await setDoc(ref, { count: 1, clientId: cid, date: today });
-    } else {
-      await updateDoc(ref, { count: increment(1) });
-    }
-  } catch {}
-}
-
-async function getDownloadCount() {
-  if (isPremium) return 0;
-  const cid = await getClientId();
-  const today = todayKey();
-  const ref = doc(db, 'limits', `${cid}_${today}`);
-  try {
-    const snap = await getDoc(ref);
-    return snap.exists() ? (snap.data().count || 0) : 0;
-  } catch { return 0; }
-}
-
-// ── UI PREMIUM BADGE ─────────────────────────────────────────
-function updatePremiumBadge() {
-  const badge = document.getElementById('premiumBadge');
-  const counter = document.getElementById('dlCounter');
-  if (!badge || !counter) return;
-
-  if (isPremium) {
-    const exp = new Date(premiumExpiry).toLocaleDateString('fr', {day:'2-digit', month:'long', year:'numeric'});
-    badge.innerHTML = `⭐ Premium actif — expire le ${exp}`;
-    badge.style.color = '#f59e0b';
-    badge.style.display = 'block';
-    counter.style.display = 'none';
+function renderCounter() {
+  const el = document.getElementById("dlCounter");
+  if (!el) return;
+  if (isPremium()) { el.style.display = "none"; return; }
+  const used      = getCount();
+  const remaining = Math.max(0, FREE_LIMIT - used);
+  el.style.display = "block";
+  if (remaining === 0) {
+    el.innerHTML = `
+      <div style="display:flex;align-items:center;gap:8px;justify-content:center;flex-wrap:wrap;">
+        <span style="color:#ef4444;font-weight:600;">🚫 Limite atteinte pour aujourd'hui</span>
+        <a href="premium.html" style="color:#a78bfa;font-weight:700;text-decoration:underline;">⭐ Passe Premium pour continuer</a>
+      </div>
+      <div style="background:#ef4444;height:4px;border-radius:4px;margin-top:6px;"></div>`;
   } else {
-    badge.style.display = 'none';
-    getDownloadCount().then(count => {
-      const left = DAILY_LIMIT - count;
-      const pct = Math.round((left / DAILY_LIMIT) * 100);
-      const color = left === 0 ? '#ef4444' : left === 1 ? '#f59e0b' : '#6b7280';
-      const barColor = left === 0 ? '#ef4444' : left === 1 ? '#f59e0b' : '#4f46e5';
-      const icon = left === 0 ? '🚫' : left === 1 ? '⚠️' : '🔓';
-      const msg = left === 0
-        ? `Limite atteinte · <a href="premium.html" style="color:#f59e0b;font-weight:700;text-decoration:none;">⭐ Passe Premium pour continuer</a>`
-        : `${icon} <strong style="color:${color}">${left}</strong> téléchargement${left > 1 ? 's' : ''} gratuit${left > 1 ? 's' : ''} restant aujourd'hui`;
-      counter.innerHTML = `
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center;">
-          <span style="font-size:0.8rem;color:${color}">${msg}</span>
-        </div>
-        <div style="margin:6px auto 0;max-width:220px;height:4px;background:#e5e7eb;border-radius:4px;overflow:hidden;">
-          <div style="height:100%;width:${pct}%;background:${barColor};border-radius:4px;transition:width 0.4s ease;"></div>
-        </div>`;
-      counter.style.display = 'block';
-    });
+    const pct   = ((FREE_LIMIT - remaining) / FREE_LIMIT) * 100;
+    const color = remaining === 1 ? "#f97316" : "#7c3aed";
+    const icon  = remaining === 1 ? "⚠️" : "🔓";
+    el.innerHTML = `
+      <span style="color:${color};font-weight:600;">${icon} ${remaining} téléchargement${remaining > 1 ? "s" : ""} gratuit${remaining > 1 ? "s" : ""} restant${remaining > 1 ? "s" : ""} aujourd'hui</span>
+      <div style="background:#e5e7eb;height:4px;border-radius:4px;margin-top:6px;overflow:hidden;">
+        <div style="background:${color};height:100%;width:${pct}%;transition:width .4s;"></div>
+      </div>`;
   }
 }
 
-// ── TABS ─────────────────────────────────────────────────────
-const tabPlaceholders = {
-  yt: 'Colle ton lien YouTube ici…',
-  tt: 'Colle ton lien TikTok ici…'
-};
-
-let currentPlatform = 'yt';
-
-const platformFormats = {
-  yt: [
-    { label: 'MP4 1080p HD', fmt: 'mp4', q: '1080', sel: true },
-    { label: 'MP4 720p',     fmt: 'mp4', q: '720'  },
-    { label: 'MP4 480p',     fmt: 'mp4', q: '480'  },
-    { label: 'MP4 360p',     fmt: 'mp4', q: '360'  },
-    { label: 'MP3 Audio',    fmt: 'mp3', q: 'best'  },
-  ],
-  tt: [
-    { label: 'MP4 HD',    fmt: 'mp4', q: '720', sel: true },
-    { label: 'MP4 SD',    fmt: 'mp4', q: '480' },
-    { label: 'MP3 Audio', fmt: 'mp3', q: 'best' },
-  ]
-};
-
-function renderFormats(platform) {
-  const fmts = platformFormats[platform] || platformFormats.yt;
-  const row = document.getElementById('fmtRow');
-  if (!row) return;
-  row.innerHTML = fmts.map(f =>
-    `<div class="fmt-chip${f.sel ? ' selected' : ''}" data-fmt="${f.fmt}" data-q="${f.q}" onclick="selectFmt(this)">${f.label}</div>`
-  ).join('');
+// ── Onglets YouTube / TikTok ──────────────────────────────────────────────────
+function switchTab(btn, platform) {
+  currentPlatform = platform;
+  document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+  btn.classList.add("active");
+  const input = document.getElementById("urlInput");
+  if (input) {
+    input.value       = "";
+    input.placeholder = platform === "yt"
+      ? "Colle ton lien YouTube ici…"
+      : "Colle ton lien TikTok ici…";
+  }
+  renderFormats();
+  hideResult();
 }
 
-function switchTab(btn, platform) {
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  btn.classList.add('active');
-  currentPlatform = platform;
-  document.getElementById('urlInput').placeholder = tabPlaceholders[platform] || 'Colle ton lien ici…';
-  document.getElementById('urlInput').value = '';
-  renderFormats(platform);
-  hideResult();
+function renderFormats() {
+  const row = document.querySelector(".format-row");
+  if (!row) return;
+  const ytF = [
+    { label: "MP4 1080p HD", fmt: "mp4", q: "1080" },
+    { label: "MP4 720p",     fmt: "mp4", q: "720"  },
+    { label: "MP4 480p",     fmt: "mp4", q: "480"  },
+    { label: "MP4 360p",     fmt: "mp4", q: "360"  },
+    { label: "MP3 Audio",    fmt: "mp3", q: "best" },
+  ];
+  const ttF = [
+    { label: "MP4 HD",    fmt: "mp4", q: "1080" },
+    { label: "MP4 SD",    fmt: "mp4", q: "720"  },
+    { label: "MP3 Audio", fmt: "mp3", q: "best" },
+  ];
+  const formats = currentPlatform === "tt" ? ttF : ytF;
+  row.innerHTML = formats
+    .map((f, i) => `<div class="fmt-chip${i === 0 ? " selected" : ""}" data-fmt="${f.fmt}" data-q="${f.q}" onclick="selectFmt(this)">${f.label}</div>`)
+    .join("");
+  currentFmt = formats[0].fmt;
+  currentQ   = formats[0].q;
 }
 
 function selectFmt(el) {
-  document.querySelectorAll('.fmt-chip').forEach(c => c.classList.remove('selected'));
-  el.classList.add('selected');
+  document.querySelectorAll(".fmt-chip").forEach(c => c.classList.remove("selected"));
+  el.classList.add("selected");
+  currentFmt = el.dataset.fmt;
+  currentQ   = el.dataset.q;
 }
 
+// ── UI ────────────────────────────────────────────────────────────────────────
+function showLoader(msg) {
+  const l = document.getElementById("loader");
+  const t = document.getElementById("loaderText");
+  if (l) l.style.display = "flex";
+  if (t) t.textContent = msg || "Analyse en cours…";
+  hideResult();
+}
+function hideLoader() {
+  const l = document.getElementById("loader");
+  if (l) l.style.display = "none";
+}
+function showResult(title, meta, thumb, btns) {
+  const row    = document.getElementById("resultRow");
+  const rTitle = document.getElementById("rTitle");
+  const rMeta  = document.getElementById("rMeta");
+  const rThumb = document.getElementById("rThumb");
+  const dlGrid = document.getElementById("dlGrid");
+  if (!row) return;
+  if (rTitle) rTitle.textContent = title;
+  if (rMeta)  rMeta.textContent  = meta;
+  if (rThumb && thumb) { rThumb.src = thumb; rThumb.style.display = "block"; }
+  if (dlGrid) dlGrid.innerHTML = btns;
+  row.style.display = "flex";
+}
 function hideResult() {
-  document.getElementById('resultRow').classList.remove('show');
-  document.getElementById('loader').classList.remove('show');
+  const r = document.getElementById("resultRow");
+  if (r) r.style.display = "none";
+}
+function showToast(msg, color) {
+  let t = document.getElementById("premToast");
+  if (!t) { t = document.createElement("div"); t.id = "premToast"; document.body.appendChild(t); }
+  t.textContent = msg;
+  if (color) t.style.background = color;
+  t.classList.add("show");
+  setTimeout(() => t.classList.remove("show"), 4000);
+}
+function formatDuration(s) {
+  if (!s) return "";
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 
-function fmtDur(sec) {
-  if (!sec) return '';
-  const m = Math.floor(sec / 60), s = sec % 60;
-  return `${m}:${s.toString().padStart(2, '0')}`;
-}
-
-function dlIcon() {
-  return `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-    <polyline points="7 10 12 15 17 10"/>
-    <line x1="12" y1="15" x2="12" y2="3"/>
-  </svg>`;
-}
-
-// ── ANALYZE ───────────────────────────────────────────────────
+// ── Analyse ───────────────────────────────────────────────────────────────────
 async function analyze() {
-  const url = document.getElementById('urlInput').value.trim();
-  if (!url) { document.getElementById('urlInput').focus(); return; }
+  const url = (document.getElementById("urlInput")?.value || "").trim();
+  if (!url) { showToast("⚠️ Colle un lien d'abord !"); return; }
 
-  // Vérifier la limite
-  const { allowed, count } = await canDownload();
-  if (!allowed) {
-    showLimitModal();
+  if (!isPremium() && getCount() >= FREE_LIMIT) {
+    showToast("🚫 Limite gratuite atteinte — passe Premium !", "#ef4444");
+    renderCounter();
     return;
   }
 
-  hideResult();
-  const loader = document.getElementById('loader');
-  loader.classList.add('show');
-  document.getElementById('loaderText').textContent = 'Analyse du lien en cours…';
+  showLoader("Analyse du lien en cours…");
 
   try {
-    const res = await fetch(`${BACKEND}/info?url=${encodeURIComponent(url)}`);
-    if (!res.ok) throw new Error('Erreur serveur');
+    const res  = await fetch(`${API}/info?url=${encodeURIComponent(url)}`);
     const data = await res.json();
 
-    loader.classList.remove('show');
+    if (!res.ok || data.error || data.detail) {
+      hideLoader();
+      showToast("❌ " + (data.detail || data.error || "Impossible d'analyser ce lien. Vérifie qu'il est public."), "#ef4444");
+      return;
+    }
 
-    document.getElementById('rThumb').src = data.thumbnail || '';
-    document.getElementById('rTitle').textContent = data.title || 'Vidéo';
-    const dur = data.duration ? ` · ${fmtDur(data.duration)}` : '';
-    document.getElementById('rMeta').textContent = (data.platform || '') + dur;
+    hideLoader();
 
-    const formats = platformFormats[currentPlatform] || platformFormats.yt;
+    const dur  = formatDuration(data.duration);
+    const meta = [data.uploader, dur].filter(Boolean).join(" · ");
 
-    document.getElementById('dlGrid').innerHTML = formats.map(f => `
-      <a class="dl-chip" href="#" onclick="handleDownload(event,'${encodeURIComponent(url)}','${f.fmt}','${f.q}')">
-        ${dlIcon()} ${f.label}
-      </a>
-    `).join('');
+    const fmts = currentPlatform === "tt"
+      ? [{ label: "MP4 HD", fmt: "mp4", q: "1080" }, { label: "MP4 SD", fmt: "mp4", q: "720" }, { label: "MP3 Audio", fmt: "mp3", q: "best" }]
+      : [{ label: "MP4 1080p HD", fmt: "mp4", q: "1080" }, { label: "MP4 720p", fmt: "mp4", q: "720" }, { label: "MP4 480p", fmt: "mp4", q: "480" }, { label: "MP4 360p", fmt: "mp4", q: "360" }, { label: "MP3 Audio", fmt: "mp3", q: "best" }];
 
-    document.getElementById('resultRow').classList.add('show');
+    const btns = fmts.map(f =>
+      `<a class="dl-btn${f.fmt === "mp3" ? " dl-btn-audio" : ""}"
+          href="${API}/download?url=${encodeURIComponent(url)}&format=${f.fmt}&quality=${f.q}"
+          download
+          onclick="onDownloadClick()">
+        ⬇ ${f.label}
+      </a>`
+    ).join("");
 
-  } catch (e) {
-    loader.classList.remove('show');
-    alert('Impossible d\'analyser ce lien.\nVérifie qu\'il est public et réessaie.');
+    showResult(data.title || "Vidéo", meta, data.thumbnail || "", btns);
+
+    if (!isPremium()) {
+      incrementCount();
+      renderCounter();
+    }
+
+  } catch (err) {
+    hideLoader();
+    showToast("❌ Erreur réseau — vérifie ta connexion.", "#ef4444");
+    console.error(err);
   }
 }
 
-// ── DOWNLOAD HANDLER ─────────────────────────────────────────
-async function handleDownload(e, encodedUrl, fmt, q) {
-  e.preventDefault();
-  const { allowed } = await canDownload();
-  if (!allowed) { showLimitModal(); return; }
-
-  await recordDownload();
-  updatePremiumBadge();
-
-  const url = decodeURIComponent(encodedUrl);
-  window.location.href = `${BACKEND}/download?url=${encodedUrl}&format=${fmt}&quality=${q}`;
+function onDownloadClick() {
+  renderCounter();
 }
 
-// ── LIMIT MODAL ───────────────────────────────────────────────
-function showLimitModal() {
-  document.getElementById('limitModal').style.display = 'flex';
-}
-function closeLimitModal() {
-  document.getElementById('limitModal').style.display = 'none';
-}
-
-// ── PREMIUM CODE MODAL ────────────────────────────────────────
-function openCodeModal() {
-  closeLimitModal();
-  document.getElementById('codeModal').style.display = 'flex';
-  document.getElementById('codeInput').value = '';
-  document.getElementById('codeMsg').textContent = '';
-}
-function closeCodeModal() {
-  document.getElementById('codeModal').style.display = 'none';
-}
-
-async function activateCode() {
-  const code = document.getElementById('codeInput').value.trim();
-  if (!code) return;
-  const btn = document.getElementById('activateBtn');
-  btn.disabled = true;
-  btn.textContent = 'Vérification…';
-  document.getElementById('codeMsg').textContent = '';
-
-  const result = await checkPremiumCode(code);
-  if (result.valid) {
-    isPremium = true;
-    premiumExpiry = result.expiry;
-    const exp = new Date(result.expiry).toLocaleDateString('fr', {day:'2-digit', month:'long', year:'numeric'});
-    document.getElementById('codeMsg').style.color = '#10b981';
-    document.getElementById('codeMsg').textContent = `✅ Premium activé ! Expire le ${exp}`;
-    updatePremiumBadge();
-    setTimeout(() => closeCodeModal(), 2000);
-  } else {
-    document.getElementById('codeMsg').style.color = '#ef4444';
-    document.getElementById('codeMsg').textContent = result.msg;
-  }
-  btn.disabled = false;
-  btn.textContent = 'Activer';
-}
-
-// ── INIT ──────────────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', async () => {
-  await checkSavedPremium();
-  updatePremiumBadge();
-  renderFormats('yt'); // init YouTube formats
-
-  document.getElementById('urlInput').addEventListener('keydown', e => {
-    if (e.key === 'Enter') analyze();
-  });
+// ── Init ──────────────────────────────────────────────────────────────────────
+document.addEventListener("DOMContentLoaded", () => {
+  renderFormats();
+  renderCounter();
 });
 
-// Expose functions to global scope (used in HTML onclick)
-window.switchTab = switchTab;
-window.selectFmt = selectFmt;
-window.analyze = analyze;
-window.handleDownload = handleDownload;
-window.showLimitModal = showLimitModal;
-window.closeLimitModal = closeLimitModal;
-window.openCodeModal = openCodeModal;
-window.closeCodeModal = closeCodeModal;
-window.activateCode = activateCode;
-window.renderFormats = renderFormats;
+// Exports globaux
+window.analyze         = analyze;
+window.switchTab       = switchTab;
+window.selectFmt       = selectFmt;
+window.renderFormats   = renderFormats;
+window.onDownloadClick = onDownloadClick;
