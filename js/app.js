@@ -172,8 +172,20 @@ function updatePremiumBadge() {
     badge.style.display = 'none';
     getDownloadCount().then(count => {
       const left = DAILY_LIMIT - count;
-      counter.textContent = `${left} téléchargement${left > 1 ? 's' : ''} gratuit${left > 1 ? 's' : ''} restant aujourd'hui`;
-      counter.style.color = left <= 1 ? '#ef4444' : '#6b7280';
+      const pct = Math.round((left / DAILY_LIMIT) * 100);
+      const color = left === 0 ? '#ef4444' : left === 1 ? '#f59e0b' : '#6b7280';
+      const barColor = left === 0 ? '#ef4444' : left === 1 ? '#f59e0b' : '#4f46e5';
+      const icon = left === 0 ? '🚫' : left === 1 ? '⚠️' : '🔓';
+      const msg = left === 0
+        ? `Limite atteinte · <a href="premium.html" style="color:#f59e0b;font-weight:700;text-decoration:none;">⭐ Passe Premium pour continuer</a>`
+        : `${icon} <strong style="color:${color}">${left}</strong> téléchargement${left > 1 ? 's' : ''} gratuit${left > 1 ? 's' : ''} restant aujourd'hui`;
+      counter.innerHTML = `
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center;">
+          <span style="font-size:0.8rem;color:${color}">${msg}</span>
+        </div>
+        <div style="margin:6px auto 0;max-width:220px;height:4px;background:#e5e7eb;border-radius:4px;overflow:hidden;">
+          <div style="height:100%;width:${pct}%;background:${barColor};border-radius:4px;transition:width 0.4s ease;"></div>
+        </div>`;
       counter.style.display = 'block';
     });
   }
@@ -182,14 +194,42 @@ function updatePremiumBadge() {
 // ── TABS ─────────────────────────────────────────────────────
 const tabPlaceholders = {
   yt: 'Colle ton lien YouTube ici…',
-  ig: 'Colle ton lien Instagram ici…',
   tt: 'Colle ton lien TikTok ici…'
 };
+
+let currentPlatform = 'yt';
+
+const platformFormats = {
+  yt: [
+    { label: 'MP4 1080p HD', fmt: 'mp4', q: '1080', sel: true },
+    { label: 'MP4 720p',     fmt: 'mp4', q: '720'  },
+    { label: 'MP4 480p',     fmt: 'mp4', q: '480'  },
+    { label: 'MP4 360p',     fmt: 'mp4', q: '360'  },
+    { label: 'MP3 Audio',    fmt: 'mp3', q: 'best'  },
+  ],
+  tt: [
+    { label: 'MP4 HD',    fmt: 'mp4', q: '720', sel: true },
+    { label: 'MP4 SD',    fmt: 'mp4', q: '480' },
+    { label: 'MP3 Audio', fmt: 'mp3', q: 'best' },
+  ]
+};
+
+function renderFormats(platform) {
+  const fmts = platformFormats[platform] || platformFormats.yt;
+  const row = document.getElementById('fmtRow');
+  if (!row) return;
+  row.innerHTML = fmts.map(f =>
+    `<div class="fmt-chip${f.sel ? ' selected' : ''}" data-fmt="${f.fmt}" data-q="${f.q}" onclick="selectFmt(this)">${f.label}</div>`
+  ).join('');
+}
 
 function switchTab(btn, platform) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   btn.classList.add('active');
-  document.getElementById('urlInput').placeholder = tabPlaceholders[platform];
+  currentPlatform = platform;
+  document.getElementById('urlInput').placeholder = tabPlaceholders[platform] || 'Colle ton lien ici…';
+  document.getElementById('urlInput').value = '';
+  renderFormats(platform);
   hideResult();
 }
 
@@ -246,12 +286,7 @@ async function analyze() {
     const dur = data.duration ? ` · ${fmtDur(data.duration)}` : '';
     document.getElementById('rMeta').textContent = (data.platform || '') + dur;
 
-    const formats = [
-      { label: 'MP4 1080p', fmt: 'mp4', q: '1080' },
-      { label: 'MP4 720p',  fmt: 'mp4', q: '720'  },
-      { label: 'MP4 480p',  fmt: 'mp4', q: '480'  },
-      { label: 'MP3 Audio', fmt: 'mp3', q: 'best'  },
-    ];
+    const formats = platformFormats[currentPlatform] || platformFormats.yt;
 
     document.getElementById('dlGrid').innerHTML = formats.map(f => `
       <a class="dl-chip" href="#" onclick="handleDownload(event,'${encodeURIComponent(url)}','${f.fmt}','${f.q}')">
@@ -328,6 +363,7 @@ async function activateCode() {
 document.addEventListener('DOMContentLoaded', async () => {
   await checkSavedPremium();
   updatePremiumBadge();
+  renderFormats('yt'); // init YouTube formats
 
   document.getElementById('urlInput').addEventListener('keydown', e => {
     if (e.key === 'Enter') analyze();
@@ -344,3 +380,4 @@ window.closeLimitModal = closeLimitModal;
 window.openCodeModal = openCodeModal;
 window.closeCodeModal = closeCodeModal;
 window.activateCode = activateCode;
+window.renderFormats = renderFormats;
