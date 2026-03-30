@@ -241,8 +241,9 @@ async def get_info(url: str):
                     headers={"X-RapidAPI-Key": key, "X-RapidAPI-Host": "youtube-mp36.p.rapidapi.com"}, timeout=15)
                 if r.status_code == 200:
                     d = r.json()
+                    yt_id = _extract_yt_id(url)
                     return {"title": d.get("title", "YouTube"), "duration": int(d.get("duration", 0) or 0),
-                            "thumbnail": None, "uploader": "YouTube", "platform": platform}
+                            "thumbnail": f"https://img.youtube.com/vi/{yt_id}/hqdefault.jpg", "uploader": "YouTube", "platform": platform}
         except Exception as e2:
             logger.error(f"RapidAPI info [{platform}]: {e2}")
 
