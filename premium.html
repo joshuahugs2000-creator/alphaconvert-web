@@ -9,25 +9,33 @@
 * { margin:0; padding:0; box-sizing:border-box; }
 body { font-family:'Plus Jakarta Sans',sans-serif; background:#fff; color:#1a1a2e; }
 
-/* NAV */
-nav { display:flex; align-items:center; justify-content:space-between; padding:0 2.5rem; height:64px; border-bottom:1px solid #f0f0f5; background:#fff; position:sticky; top:0; z-index:100; box-shadow:0 1px 0 #f0f0f5; }
+nav { display:flex; align-items:center; justify-content:space-between; padding:0 2.5rem; height:64px; border-bottom:1px solid #f0f0f5; background:#fff; position:sticky; top:0; z-index:100; }
 .logo { font-weight:800; font-size:1.25rem; color:#1a1a2e; text-decoration:none; display:flex; align-items:center; gap:0.4rem; }
 .logo-icon { width:32px; height:32px; border-radius:8px; background:linear-gradient(135deg,#4f46e5,#7c3aed); display:flex; align-items:center; justify-content:center; color:#fff; font-size:1rem; }
 .logo span { color:#4f46e5; }
 .nav-right { display:flex; align-items:center; gap:0.8rem; }
-.nav-right a { color:#555; text-decoration:none; font-size:0.88rem; padding:0.4rem 0.9rem; border-radius:6px; font-weight:500; border:1.5px solid #e5e7eb; transition:all 0.15s; }
-.nav-right a:hover { border-color:#4f46e5; color:#4f46e5; }
+.nav-right a { color:#555; text-decoration:none; font-size:0.88rem; padding:0.4rem 0.9rem; border-radius:6px; font-weight:500; border:1.5px solid #e5e7eb; }
 .auth-btn { background:#4f46e5 !important; color:#fff !important; border-color:#4f46e5 !important; border-radius:8px !important; }
-.auth-btn:hover { background:#4338ca !important; }
+.user-badge { display:flex; align-items:center; gap:0.5rem; font-size:0.85rem; font-weight:600; color:#374151; }
+.user-avatar { width:30px; height:30px; border-radius:50%; background:linear-gradient(135deg,#4f46e5,#7c3aed); display:flex; align-items:center; justify-content:center; color:#fff; font-size:0.75rem; font-weight:700; }
+.logout-btn { font-size:0.75rem; color:#9ca3af; cursor:pointer; background:none; border:none; font-family:inherit; padding:0.2rem 0.5rem; }
+.logout-btn:hover { color:#ef4444; }
+.premium-tag { background:#dcfce7; color:#166534; font-size:0.72rem; font-weight:700; padding:0.2rem 0.6rem; border-radius:4px; }
 
-/* HERO */
 .hero { background:linear-gradient(180deg,#f8f7ff,#fff); padding:3.5rem 2rem 2.5rem; text-align:center; border-bottom:1px solid #f0f0f5; }
 .premium-badge { display:inline-flex; align-items:center; gap:0.5rem; background:#fef3c7; color:#92400e; font-size:0.78rem; font-weight:700; padding:0.3rem 0.9rem; border-radius:100px; margin-bottom:1.2rem; }
 .hero h1 { font-size:clamp(1.8rem,4vw,2.8rem); font-weight:800; letter-spacing:-0.03em; margin-bottom:0.8rem; }
 .hero h1 span { color:#4f46e5; }
 .hero p { color:#6b7280; font-size:1rem; max-width:480px; margin:0 auto; }
 
-/* PLANS */
+/* PREMIUM STATUS BANNER */
+.premium-banner { max-width:700px; margin:1.5rem auto; padding:0 2rem; display:none; }
+.premium-banner.show { display:block; }
+.banner-box { background:linear-gradient(135deg,#f0fdf4,#dcfce7); border:1.5px solid #86efac; border-radius:16px; padding:1.2rem 1.5rem; display:flex; align-items:center; gap:1rem; }
+.banner-icon { font-size:2rem; flex-shrink:0; }
+.banner-text h3 { font-size:1rem; font-weight:800; color:#166534; margin-bottom:0.2rem; }
+.banner-text p { font-size:0.85rem; color:#15803d; }
+
 .plans-section { padding:3rem 2rem; max-width:960px; margin:0 auto; }
 .plans-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:1.2rem; }
 .plan-card { border:1.5px solid #e5e7eb; border-radius:16px; padding:1.8rem; display:flex; flex-direction:column; gap:1rem; transition:all 0.2s; cursor:pointer; position:relative; background:#fff; }
@@ -47,36 +55,34 @@ nav { display:flex; align-items:center; justify-content:space-between; padding:0
 .plan-btn-outline { background:#fff; border:1.5px solid #4f46e5 !important; color:#4f46e5; }
 .plan-btn-fill { background:#4f46e5; color:#fff; }
 .plan-btn-fill:hover { background:#4338ca; }
-.plan-btn-outline:hover { background:#f5f5ff; }
 
-/* CONTACT SECTION */
-.contact-section { max-width:700px; margin:0 auto; padding:0 2rem 3rem; }
+.contact-section { max-width:700px; margin:0 auto; padding:0 2rem 3rem; display:none; }
+.contact-section.show { display:block; }
 .contact-title { font-size:1.1rem; font-weight:800; margin-bottom:1rem; text-align:center; color:#374151; }
 .contact-subtitle { font-size:0.875rem; color:#6b7280; text-align:center; margin-bottom:1.5rem; }
-.contact-selected-plan { background:#f8f7ff; border:1.5px solid #ede9fe; border-radius:10px; padding:0.8rem 1.2rem; margin-bottom:1.5rem; display:flex; align-items:center; justify-content:space-between; font-size:0.88rem; display:none; }
-.contact-selected-plan.show { display:flex; }
+.contact-selected-plan { background:#f8f7ff; border:1.5px solid #ede9fe; border-radius:10px; padding:0.8rem 1.2rem; margin-bottom:1.5rem; display:flex; align-items:center; justify-content:space-between; font-size:0.88rem; }
 .contact-selected-plan strong { color:#4f46e5; }
 .contact-btns { display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1.5rem; }
 .contact-btn { display:flex; align-items:center; justify-content:center; gap:0.7rem; padding:1rem 1.5rem; border-radius:12px; text-decoration:none; font-weight:700; font-size:0.9rem; transition:all 0.2s; border:none; cursor:pointer; }
 .tg-contact { background:#229ED9; color:#fff; }
-.tg-contact:hover { background:#1a8cc2; transform:translateY(-2px); box-shadow:0 6px 20px rgba(34,158,217,0.3); }
+.tg-contact:hover { background:#1a8cc2; transform:translateY(-2px); }
 .wa-contact { background:#25D366; color:#fff; }
-.wa-contact:hover { background:#1dba58; transform:translateY(-2px); box-shadow:0 6px 20px rgba(37,211,102,0.3); }
+.wa-contact:hover { background:#1dba58; transform:translateY(-2px); }
 .contact-note { background:#fff7ed; border:1.5px solid #fed7aa; border-radius:10px; padding:0.9rem 1.2rem; font-size:0.82rem; color:#92400e; text-align:center; }
 
-/* CHAT SECTION */
+/* CHAT */
 .chat-section { padding:0 2rem 3rem; max-width:700px; margin:0 auto; display:none; }
 .chat-section.show { display:block; }
 .chat-divider { display:flex; align-items:center; gap:1rem; margin-bottom:1.5rem; }
 .chat-divider::before, .chat-divider::after { content:''; flex:1; height:1px; background:#e5e7eb; }
 .chat-divider span { font-size:0.8rem; color:#9ca3af; font-weight:600; white-space:nowrap; }
 .chat-box { border:1.5px solid #e5e7eb; border-radius:16px; overflow:hidden; box-shadow:0 4px 20px rgba(0,0,0,0.06); }
-.chat-header { background:#fafafa; border-bottom:1px solid #f0f0f5; padding:0.9rem 1.2rem; display:flex; align-items:center; gap:0.8rem; }
+.chat-header-bar { background:#fafafa; border-bottom:1px solid #f0f0f5; padding:0.9rem 1.2rem; display:flex; align-items:center; gap:0.8rem; }
 .bot-avatar { width:36px; height:36px; border-radius:10px; background:linear-gradient(135deg,#4f46e5,#7c3aed); display:flex; align-items:center; justify-content:center; color:#fff; font-size:1rem; flex-shrink:0; }
 .bot-name { font-weight:700; font-size:0.9rem; }
 .bot-status { font-size:0.75rem; color:#22c55e; font-weight:500; }
-.plan-tag { background:#ede9fe; color:#4f46e5; font-size:0.75rem; font-weight:700; padding:0.2rem 0.7rem; border-radius:6px; margin-left:auto; }
-.chat-messages { height:300px; overflow-y:auto; padding:1.2rem; display:flex; flex-direction:column; gap:0.8rem; background:#fff; scroll-behavior:smooth; }
+.plan-tag-chat { background:#ede9fe; color:#4f46e5; font-size:0.75rem; font-weight:700; padding:0.2rem 0.7rem; border-radius:6px; margin-left:auto; }
+.chat-msgs { height:300px; overflow-y:auto; padding:1.2rem; display:flex; flex-direction:column; gap:0.8rem; background:#fff; scroll-behavior:smooth; }
 .msg { display:flex; gap:0.6rem; align-items:flex-end; max-width:85%; }
 .msg.bot { align-self:flex-start; }
 .msg.user { align-self:flex-end; flex-direction:row-reverse; }
@@ -84,6 +90,7 @@ nav { display:flex; align-items:center; justify-content:space-between; padding:0
 .msg-bubble { padding:0.7rem 0.9rem; border-radius:12px; font-size:0.875rem; line-height:1.5; }
 .msg.bot .msg-bubble { background:#f8f7ff; color:#1a1a2e; border-bottom-left-radius:4px; }
 .msg.user .msg-bubble { background:#4f46e5; color:#fff; border-bottom-right-radius:4px; }
+.msg-bubble.admin-reply { background:#1a1a2e; color:#fff; border-bottom-left-radius:4px; }
 .msg-time { font-size:0.7rem; color:#9ca3af; margin-top:3px; }
 .msg.user .msg-time { text-align:right; }
 .typing { display:flex; gap:4px; padding:0.7rem 0.9rem; background:#f8f7ff; border-radius:12px; border-bottom-left-radius:4px; width:fit-content; }
@@ -93,56 +100,49 @@ nav { display:flex; align-items:center; justify-content:space-between; padding:0
 @keyframes bounce { 0%,60%,100%{transform:translateY(0)} 30%{transform:translateY(-6px)} }
 .chat-input-row { border-top:1px solid #f0f0f5; padding:0.9rem 1rem; display:flex; gap:0.6rem; background:#fff; }
 .chat-input { flex:1; border:1.5px solid #e5e7eb; border-radius:10px; padding:0.6rem 0.9rem; font-size:0.88rem; font-family:inherit; outline:none; transition:border-color 0.2s; resize:none; }
-.chat-input:focus { border-color:#4f46e5; box-shadow:0 0 0 3px rgba(79,70,229,0.08); }
-.send-btn { background:#4f46e5; color:#fff; border:none; border-radius:10px; padding:0.6rem 1rem; cursor:pointer; font-size:0.85rem; font-weight:700; font-family:inherit; transition:background 0.2s; display:flex; align-items:center; gap:0.4rem; }
-.send-btn:hover { background:#4338ca; }
+.chat-input:focus { border-color:#4f46e5; }
+.send-btn { background:#4f46e5; color:#fff; border:none; border-radius:10px; padding:0.6rem 1rem; cursor:pointer; font-size:0.85rem; font-weight:700; font-family:inherit; display:flex; align-items:center; gap:0.4rem; }
 .send-btn:disabled { opacity:0.5; cursor:not-allowed; }
-.sent-notice { background:#f0fdf4; border:1.5px solid #bbf7d0; border-radius:10px; padding:0.8rem 1rem; margin:0 0 0.5rem; font-size:0.82rem; color:#166534; text-align:center; display:none; }
-.sent-notice.show { display:block; }
+.login-required-notice { padding:1rem; text-align:center; font-size:0.85rem; color:#6b7280; background:#f8f7ff; }
+.login-required-notice a { color:#4f46e5; font-weight:700; cursor:pointer; }
 
-/* CODE SECTION */
+/* CODE */
 .code-section { max-width:700px; margin:0 auto; padding:0 2rem 4rem; }
 .code-box { border:2px solid #f59e0b; border-radius:16px; padding:1.8rem; background:#fffbeb; }
 .code-box h3 { font-size:1rem; font-weight:800; margin-bottom:0.4rem; color:#92400e; }
 .code-box p { font-size:0.85rem; color:#b45309; margin-bottom:1.2rem; }
 .code-input-row { display:flex; gap:0.6rem; }
 .code-input { flex:1; background:#fff; border:1.5px solid #fcd34d; border-radius:10px; padding:0.8rem 1rem; font-size:0.95rem; font-family:inherit; color:#1a1a2e; outline:none; letter-spacing:2px; text-transform:uppercase; }
-.code-input:focus { border-color:#f59e0b; box-shadow:0 0 0 3px rgba(245,158,11,0.15); }
+.code-input:focus { border-color:#f59e0b; }
 .code-btn { background:#f59e0b; color:#000; border:none; border-radius:10px; padding:0.8rem 1.4rem; font-size:0.9rem; font-weight:700; cursor:pointer; font-family:inherit; white-space:nowrap; }
 .code-msg { font-size:0.82rem; min-height:1.2rem; margin-top:0.6rem; font-weight:600; }
+.code-login-notice { font-size:0.82rem; color:#92400e; margin-top:0.5rem; }
+.code-login-notice a { color:#4f46e5; cursor:pointer; font-weight:700; }
 
 /* AUTH MODAL */
 .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:500; align-items:center; justify-content:center; backdrop-filter:blur(4px); }
 .modal-overlay.show { display:flex; }
-.modal { background:#fff; border-radius:20px; padding:2rem; max-width:420px; width:90%; box-shadow:0 25px 60px rgba(0,0,0,0.15); }
+.modal { background:#fff; border-radius:20px; padding:2rem; max-width:420px; width:90%; box-shadow:0 25px 60px rgba(0,0,0,0.15); position:relative; }
 .modal h2 { font-size:1.3rem; font-weight:800; margin-bottom:0.4rem; }
 .modal p { font-size:0.85rem; color:#6b7280; margin-bottom:1.5rem; }
-.modal-tabs { display:flex; gap:0; margin-bottom:1.5rem; border:1.5px solid #e5e7eb; border-radius:10px; overflow:hidden; }
-.modal-tab { flex:1; padding:0.6rem; font-size:0.88rem; font-weight:700; cursor:pointer; border:none; background:#fafafa; color:#9ca3af; transition:all 0.2s; font-family:inherit; }
+.modal-tabs { display:flex; margin-bottom:1.5rem; border:1.5px solid #e5e7eb; border-radius:10px; overflow:hidden; }
+.modal-tab { flex:1; padding:0.6rem; font-size:0.88rem; font-weight:700; cursor:pointer; border:none; background:#fafafa; color:#9ca3af; font-family:inherit; }
 .modal-tab.active { background:#4f46e5; color:#fff; }
 .form-group { margin-bottom:1rem; }
 .form-label { display:block; font-size:0.8rem; font-weight:700; color:#374151; margin-bottom:0.4rem; }
-.form-input { width:100%; border:1.5px solid #e5e7eb; border-radius:10px; padding:0.75rem 1rem; font-size:0.9rem; font-family:inherit; color:#1a1a2e; outline:none; transition:border-color 0.2s; }
-.form-input:focus { border-color:#4f46e5; box-shadow:0 0 0 3px rgba(79,70,229,0.1); }
-.form-btn { width:100%; background:#4f46e5; color:#fff; border:none; border-radius:10px; padding:0.85rem; font-size:0.95rem; font-weight:700; cursor:pointer; font-family:inherit; margin-top:0.5rem; transition:background 0.2s; }
+.form-input { width:100%; border:1.5px solid #e5e7eb; border-radius:10px; padding:0.75rem 1rem; font-size:0.9rem; font-family:inherit; color:#1a1a2e; outline:none; }
+.form-input:focus { border-color:#4f46e5; }
+.form-btn { width:100%; background:#4f46e5; color:#fff; border:none; border-radius:10px; padding:0.85rem; font-size:0.95rem; font-weight:700; cursor:pointer; font-family:inherit; margin-top:0.5rem; }
 .form-btn:hover { background:#4338ca; }
 .form-btn:disabled { opacity:0.6; cursor:not-allowed; }
 .form-msg { font-size:0.82rem; min-height:1rem; margin-top:0.5rem; font-weight:600; text-align:center; }
-.modal-close { position:absolute; top:1rem; right:1rem; background:none; border:none; font-size:1.5rem; cursor:pointer; color:#9ca3af; line-height:1; }
-.modal { position:relative; }
-.google-btn { width:100%; display:flex; align-items:center; justify-content:center; gap:0.7rem; background:#fff; border:1.5px solid #e5e7eb; border-radius:10px; padding:0.75rem; font-size:0.9rem; font-weight:600; cursor:pointer; font-family:inherit; margin-top:0.8rem; transition:all 0.2s; }
+.modal-close { position:absolute; top:1rem; right:1rem; background:none; border:none; font-size:1.5rem; cursor:pointer; color:#9ca3af; }
+.google-btn { width:100%; display:flex; align-items:center; justify-content:center; gap:0.7rem; background:#fff; border:1.5px solid #e5e7eb; border-radius:10px; padding:0.75rem; font-size:0.9rem; font-weight:600; cursor:pointer; font-family:inherit; margin-top:0.8rem; }
 .google-btn:hover { border-color:#4f46e5; background:#f8f7ff; }
 .divider { display:flex; align-items:center; gap:0.8rem; margin:1rem 0; }
 .divider::before, .divider::after { content:''; flex:1; height:1px; background:#e5e7eb; }
 .divider span { font-size:0.75rem; color:#9ca3af; font-weight:600; }
 
-/* USER BADGE */
-.user-badge { display:flex; align-items:center; gap:0.5rem; font-size:0.85rem; font-weight:600; color:#374151; }
-.user-avatar { width:30px; height:30px; border-radius:50%; background:linear-gradient(135deg,#4f46e5,#7c3aed); display:flex; align-items:center; justify-content:center; color:#fff; font-size:0.75rem; font-weight:700; }
-.logout-btn { font-size:0.75rem; color:#9ca3af; cursor:pointer; background:none; border:none; font-family:inherit; padding:0.2rem 0.5rem; }
-.logout-btn:hover { color:#ef4444; }
-
-/* FOOTER */
 footer { background:#0f0f1a; color:#6b7280; padding:2rem; text-align:center; font-size:0.85rem; margin-top:2rem; }
 footer a { color:#9ca3af; text-decoration:none; }
 
@@ -152,7 +152,6 @@ footer a { color:#9ca3af; text-decoration:none; }
   .contact-btns { grid-template-columns:1fr; }
   .chat-section, .contact-section, .code-section { padding:0 1rem 2rem; }
   .code-input-row { flex-direction:column; }
-  .modal { padding:1.5rem; }
 }
 </style>
 </head>
@@ -171,6 +170,7 @@ footer a { color:#9ca3af; text-decoration:none; }
       <div class="user-badge">
         <div class="user-avatar" id="userInitial">?</div>
         <span id="userName"></span>
+        <span id="navPremiumTag" class="premium-tag" style="display:none">⭐ Premium</span>
         <button class="logout-btn" onclick="logout()">Déconnexion</button>
       </div>
     </div>
@@ -182,6 +182,17 @@ footer a { color:#9ca3af; text-decoration:none; }
   <h1>Passe à la vitesse <span>supérieure</span></h1>
   <p>Téléchargements illimités, vitesse prioritaire. Contacte-nous sur Telegram ou WhatsApp pour payer.</p>
 </section>
+
+<!-- PREMIUM STATUS BANNER -->
+<div class="premium-banner" id="premiumBanner">
+  <div class="banner-box">
+    <div class="banner-icon">🎉</div>
+    <div class="banner-text">
+      <h3 id="bannerTitle">Premium actif !</h3>
+      <p id="bannerSubtitle">Votre abonnement est actif.</p>
+    </div>
+  </div>
+</div>
 
 <!-- PLANS -->
 <div class="plans-section">
@@ -210,6 +221,18 @@ footer a { color:#9ca3af; text-decoration:none; }
       </div>
       <button class="plan-btn plan-btn-fill">Choisir ce plan</button>
     </div>
+    <div class="plan-card" onclick="selectPlan(this,'6 Mois','20$')">
+      <div class="plan-name">6 Mois</div>
+      <div class="plan-price"><span class="plan-amount">20$</span><span class="plan-period">/6 mois</span></div>
+      <span class="plan-saving">Économise 33%</span>
+      <div class="plan-features">
+        <div class="feat-line"><div class="check">✓</div> Téléchargements illimités</div>
+        <div class="feat-line"><div class="check">✓</div> Toutes qualités disponibles</div>
+        <div class="feat-line"><div class="check">✓</div> Vitesse prioritaire</div>
+        <div class="feat-line"><div class="check">✓</div> Support prioritaire</div>
+      </div>
+      <button class="plan-btn plan-btn-outline">Choisir ce plan</button>
+    </div>
     <div class="plan-card" onclick="selectPlan(this,'1 An','35$')">
       <div class="plan-name">1 An</div>
       <div class="plan-price"><span class="plan-amount">35$</span><span class="plan-period">/an</span></div>
@@ -225,13 +248,13 @@ footer a { color:#9ca3af; text-decoration:none; }
   </div>
 </div>
 
-<!-- CONTACT SECTION -->
-<div class="contact-section" id="contactSection" style="display:none">
-  <div class="contact-selected-plan show" id="selectedPlanBanner">
+<!-- CONTACT -->
+<div class="contact-section" id="contactSection">
+  <div class="contact-selected-plan" id="selectedPlanBanner">
     Plan sélectionné : <strong id="selectedPlanLabel">—</strong>
   </div>
   <p class="contact-title">Contacte-nous pour payer</p>
-  <p class="contact-subtitle">Choisis la plateforme de ton choix — on te répond en moins de 5 minutes.</p>
+  <p class="contact-subtitle">On te répond en moins de 5 minutes.</p>
   <div class="contact-btns">
     <a id="tgContactBtn" href="https://t.me/Loicdev" target="_blank" class="contact-btn tg-contact">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.833.941z"/></svg>
@@ -243,33 +266,35 @@ footer a { color:#9ca3af; text-decoration:none; }
     </a>
   </div>
   <div class="contact-note">
-    💬 Après paiement, tu recevras un <strong>code d'activation</strong> à entrer ci-dessous pour activer ton accès Premium.
+    💬 Après paiement, tu recevras un <strong>code d'activation</strong> à entrer ci-dessous.
   </div>
 </div>
 
-<!-- CHAT SECTION -->
+<!-- CHAT -->
 <div class="chat-section" id="chatSection">
   <div class="chat-divider"><span>ou envoie-nous un message directement</span></div>
   <div class="chat-box">
-    <div class="chat-header">
+    <div class="chat-header-bar">
       <div class="bot-avatar">💬</div>
       <div>
         <div class="bot-name">Support AlphaConvert</div>
         <div class="bot-status">● En ligne</div>
       </div>
-      <div class="plan-tag" id="chatPlanTag">—</div>
+      <div class="plan-tag-chat" id="chatPlanTag">—</div>
     </div>
-    <div class="chat-messages" id="chatMessages">
+    <div class="chat-msgs" id="chatMsgs">
       <div class="msg bot">
         <div class="msg-avatar">⭐</div>
         <div>
-          <div class="msg-bubble">👋 Bonjour ! Tu peux nous envoyer un message ici. Un admin te répondra sur Telegram dès que possible.</div>
+          <div class="msg-bubble">👋 Bonjour ! Envoie-nous un message ici. Un admin te répondra directement dans ce chat.</div>
           <div class="msg-time">maintenant</div>
         </div>
       </div>
     </div>
-    <div class="sent-notice" id="sentNotice">✅ Message envoyé ! Un admin va te contacter sur Telegram.</div>
-    <div class="chat-input-row">
+    <div id="chatLoginNotice" class="login-required-notice" style="display:none;">
+      <a onclick="openAuthModal()">Connecte-toi</a> pour envoyer un message et recevoir les réponses de l'admin.
+    </div>
+    <div class="chat-input-row" id="chatInputRow">
       <textarea class="chat-input" id="chatInput" placeholder="Écris ton message ici…" rows="1" onkeydown="handleChatKey(event)"></textarea>
       <button class="send-btn" id="sendBtn" onclick="sendChatMessage()">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
@@ -284,6 +309,9 @@ footer a { color:#9ca3af; text-decoration:none; }
   <div class="code-box">
     <h3>🔑 Activer mon code Premium</h3>
     <p>Tu as reçu un code après ton paiement ? Entre-le ici pour activer ton accès.</p>
+    <div id="codeLoginNotice" class="code-login-notice" style="display:none; margin-bottom:0.8rem;">
+      ⚠️ Tu dois être <a onclick="openAuthModal()">connecté</a> pour activer un code — ton Premium sera lié à ton compte.
+    </div>
     <div class="code-input-row">
       <input class="code-input" id="codeInput" type="text" placeholder="ALPHA-XXXX-XXXX" onkeydown="if(event.key==='Enter') activateCode()">
       <button class="code-btn" onclick="activateCode()">Activer</button>
@@ -350,8 +378,12 @@ footer a { color:#9ca3af; text-decoration:none; }
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, doc, getDoc, setDoc, updateDoc, addDoc, collection, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, updateProfile } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, doc, getDoc, setDoc, updateDoc, addDoc, collection,
+         serverTimestamp, onSnapshot, query, orderBy }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword,
+         signOut, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, updateProfile }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyBJgtQp4ZrOPuUhmwiQw6FmOvt7nywudOc",
@@ -374,9 +406,11 @@ const BACKEND = window.location.hostname === 'localhost' || window.location.host
 let selectedPlan = '';
 let selectedAmount = '';
 let currentUser = null;
+let sessionId = null;
+let msgUnsub = null;
 
-// ── AUTH STATE ─────────────────────────────────────────────────
-onAuthStateChanged(auth, user => {
+// ── AUTH STATE ─────────────────────────────────────────────
+onAuthStateChanged(auth, async user => {
   currentUser = user;
   if (user) {
     document.getElementById('navAuth').style.display = 'none';
@@ -384,13 +418,80 @@ onAuthStateChanged(auth, user => {
     const name = user.displayName || user.email.split('@')[0];
     document.getElementById('userName').textContent = name;
     document.getElementById('userInitial').textContent = name[0].toUpperCase();
+
+    // Chat input visible
+    document.getElementById('chatLoginNotice').style.display = 'none';
+    document.getElementById('chatInputRow').style.display = 'flex';
+    document.getElementById('codeLoginNotice').style.display = 'none';
+
+    // Charger session chat + statut premium
+    await loadUserSession(user);
   } else {
     document.getElementById('navAuth').style.display = 'block';
     document.getElementById('navUser').style.display = 'none';
+    document.getElementById('navPremiumTag').style.display = 'none';
+    document.getElementById('premiumBanner').classList.remove('show');
+
+    // Masquer input chat, montrer notice
+    document.getElementById('chatLoginNotice').style.display = 'block';
+    document.getElementById('chatInputRow').style.display = 'none';
+    document.getElementById('codeLoginNotice').style.display = 'block';
   }
 });
 
-// ── AUTH MODAL ─────────────────────────────────────────────────
+async function loadUserSession(user) {
+  sessionId = user.uid;
+
+  // Charger statut premium depuis Firestore
+  const userDoc = await getDoc(doc(db, 'users', user.uid));
+  if (userDoc.exists()) {
+    const data = userDoc.data();
+    const isActive = data.premiumStatus === 'active';
+    const isUnlimited = data.unlimited === true;
+    const notExpired = isUnlimited || !data.premiumExpiry || new Date(data.premiumExpiry) > new Date();
+
+    if (isActive && notExpired) {
+      document.getElementById('navPremiumTag').style.display = 'inline';
+      document.getElementById('premiumBanner').classList.add('show');
+      document.getElementById('bannerTitle').textContent = isUnlimited ? '♾️ Premium Illimité actif !' : '🎉 Premium actif !';
+      document.getElementById('bannerSubtitle').textContent = isUnlimited
+        ? 'Accès permanent sans expiration.'
+        : `Expire le ${new Date(data.premiumExpiry).toLocaleDateString('fr',{day:'2-digit',month:'long',year:'numeric'})}`;
+    }
+  }
+
+  // Créer/mettre à jour la session dans Firestore
+  const sessionRef = doc(db, 'sessions', sessionId);
+  const sessionSnap = await getDoc(sessionRef);
+  if (!sessionSnap.exists()) {
+    await setDoc(sessionRef, {
+      userEmail: user.email,
+      userName: user.displayName || user.email.split('@')[0],
+      status: 'waiting',
+      plan: selectedPlan ? `${selectedPlan} — ${selectedAmount}` : '',
+      lastMessage: '',
+      hasNewMessage: false,
+      createdAt: serverTimestamp()
+    });
+  }
+
+  // Écouter les messages de l'admin en temps réel
+  if (msgUnsub) msgUnsub();
+  const q = query(collection(db,'sessions',sessionId,'messages'), orderBy('timestamp','asc'));
+  msgUnsub = onSnapshot(q, snap => {
+    // Afficher uniquement les nouveaux messages admin
+    snap.docChanges().forEach(change => {
+      if (change.type === 'added') {
+        const msg = change.doc.data();
+        if (msg.sender === 'admin') {
+          addChatBubble(msg.text, false, true);
+        }
+      }
+    });
+  });
+}
+
+// ── AUTH MODAL ─────────────────────────────────────────────
 window.openAuthModal = () => document.getElementById('authModal').classList.add('show');
 window.closeAuthModal = () => document.getElementById('authModal').classList.remove('show');
 
@@ -410,8 +511,7 @@ window.loginUser = async () => {
   btn.disabled = true; btn.textContent = 'Connexion…';
   try {
     await signInWithEmailAndPassword(auth, email, pass);
-    window.closeAuthModal();
-    msg.textContent = '';
+    closeAuthModal(); msg.textContent = '';
   } catch(e) {
     msg.style.color = '#ef4444';
     msg.textContent = e.code === 'auth/invalid-credential' ? '❌ Email ou mot de passe incorrect.' : '❌ Erreur. Réessaie.';
@@ -431,8 +531,7 @@ window.signupUser = async () => {
   try {
     const cred = await createUserWithEmailAndPassword(auth, email, pass);
     await updateProfile(cred.user, { displayName: name });
-    window.closeAuthModal();
-    msg.textContent = '';
+    closeAuthModal(); msg.textContent = '';
   } catch(e) {
     msg.style.color = '#ef4444';
     msg.textContent = e.code === 'auth/email-already-in-use' ? '❌ Email déjà utilisé.' : '❌ Erreur. Réessaie.';
@@ -443,54 +542,65 @@ window.signupUser = async () => {
 window.loginGoogle = async () => {
   try {
     await signInWithPopup(auth, googleProvider);
-    window.closeAuthModal();
-  } catch(e) {
-    console.error(e);
-  }
+    closeAuthModal();
+  } catch(e) { console.error(e); }
 };
 
 window.logout = async () => {
+  if (msgUnsub) msgUnsub();
   await signOut(auth);
 };
 
-// ── PLAN SELECTION ─────────────────────────────────────────────
+// ── PLAN SELECTION ─────────────────────────────────────────
 window.selectPlan = (card, plan, amount) => {
   document.querySelectorAll('.plan-card').forEach(c => c.classList.remove('selected'));
   card.classList.add('selected');
   selectedPlan = plan;
   selectedAmount = amount;
 
-  // Update contact section
-  document.getElementById('contactSection').style.display = 'block';
+  document.getElementById('contactSection').classList.add('show');
   document.getElementById('selectedPlanLabel').textContent = `${plan} — ${amount}`;
   document.getElementById('chatPlanTag').textContent = `${plan} · ${amount}`;
 
-  // Update Telegram link with plan info
   const tgMsg = encodeURIComponent(`Bonjour ! Je veux souscrire au plan Premium ${plan} (${amount}) sur AlphaConvert.`);
   document.getElementById('tgContactBtn').href = `https://t.me/Loicdev?text=${tgMsg}`;
-
-  // Update WhatsApp link with plan info
   const waMsg = encodeURIComponent(`Bonjour ! Je veux souscrire au plan Premium ${plan} (${amount}) sur AlphaConvert.`);
   document.getElementById('waContactBtn').href = `https://wa.me/22897171392?text=${waMsg}`;
 
-  // Show chat section
-  document.getElementById('chatSection').style.display = 'block';
+  document.getElementById('chatSection').classList.add('show');
   document.getElementById('contactSection').scrollIntoView({ behavior:'smooth', block:'start' });
+
+  // Mettre à jour la session Firestore avec le plan choisi
+  if (currentUser && sessionId) {
+    updateDoc(doc(db,'sessions',sessionId), { plan: `${plan} — ${amount}` }).catch(()=>{});
+  }
 };
 
-// ── CHAT ───────────────────────────────────────────────────────
+// ── CHAT ───────────────────────────────────────────────────
 function escHtml(str) {
   return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
 }
 
-function addChatMessage(text, isUser) {
-  const container = document.getElementById('chatMessages');
+function addChatBubble(text, isUser, isAdminReply = false) {
+  const container = document.getElementById('chatMsgs');
+
+  // Éviter les doublons de messages admin
+  if (isAdminReply) {
+    const existing = container.querySelectorAll('.msg.bot .msg-bubble.admin-reply');
+    for (const el of existing) {
+      if (el.innerHTML === escHtml(text)) return;
+    }
+  }
+
   const div = document.createElement('div');
   div.className = `msg ${isUser ? 'user' : 'bot'}`;
   const now = new Date().toLocaleTimeString('fr',{hour:'2-digit',minute:'2-digit'});
   if (isUser) {
     div.innerHTML = `<div class="msg-avatar" style="background:linear-gradient(135deg,#6b7280,#374151)">👤</div>
       <div><div class="msg-bubble">${escHtml(text)}</div><div class="msg-time">${now}</div></div>`;
+  } else if (isAdminReply) {
+    div.innerHTML = `<div class="msg-avatar">👑</div>
+      <div><div class="msg-bubble admin-reply">${escHtml(text)}</div><div class="msg-time">Admin · ${now}</div></div>`;
   } else {
     div.innerHTML = `<div class="msg-avatar">⭐</div>
       <div><div class="msg-bubble">${escHtml(text)}</div><div class="msg-time">${now}</div></div>`;
@@ -504,6 +614,8 @@ window.handleChatKey = (e) => {
 };
 
 window.sendChatMessage = async () => {
+  if (!currentUser) { openAuthModal(); return; }
+
   const input = document.getElementById('chatInput');
   const text = input.value.trim();
   if (!text) return;
@@ -512,12 +624,22 @@ window.sendChatMessage = async () => {
   btn.disabled = true;
   input.value = '';
 
-  addChatMessage(text, true);
+  addChatBubble(text, true);
 
-  const userInfo = currentUser
-    ? `👤 ${currentUser.displayName || currentUser.email} (${currentUser.email})`
-    : '👤 Visiteur anonyme';
+  // 1. Sauvegarder dans Firestore (pour l'admin)
+  try {
+    await addDoc(collection(db,'sessions',sessionId,'messages'), {
+      text, sender:'user', timestamp: serverTimestamp()
+    });
+    await setDoc(doc(db,'sessions',sessionId), {
+      lastMessage: text,
+      hasNewMessage: true,
+      userEmail: currentUser.email,
+      plan: selectedPlan ? `${selectedPlan} — ${selectedAmount}` : ''
+    }, { merge: true });
+  } catch(e) { console.error('Firestore error:', e); }
 
+  // 2. Envoyer aussi sur Telegram
   try {
     await fetch(`${BACKEND}/chat`, {
       method: 'POST',
@@ -525,26 +647,23 @@ window.sendChatMessage = async () => {
       body: JSON.stringify({
         message: text,
         plan: selectedPlan ? `${selectedPlan} — ${selectedAmount}` : 'Non sélectionné',
-        user: userInfo
+        user: `${currentUser.displayName || ''} (${currentUser.email})`
       })
     });
+  } catch(e) { /* Telegram optionnel */ }
 
-    document.getElementById('sentNotice').classList.add('show');
-    setTimeout(() => document.getElementById('sentNotice').classList.remove('show'), 4000);
-
-    setTimeout(() => {
-      addChatMessage('✅ Message reçu ! Un admin va te contacter très bientôt sur Telegram.', false);
-    }, 800);
-
-  } catch(e) {
-    addChatMessage('❌ Erreur d\'envoi. Contacte-nous directement sur Telegram.', false);
-  }
+  // Confirmation
+  setTimeout(() => {
+    addChatBubble('✅ Message reçu ! L\'admin te répondra ici directement.', false);
+  }, 600);
 
   btn.disabled = false;
 };
 
-// ── CODE ACTIVATION ────────────────────────────────────────────
+// ── CODE ACTIVATION ────────────────────────────────────────
 window.activateCode = async () => {
+  if (!currentUser) { openAuthModal(); return; }
+
   const input = document.getElementById('codeInput');
   const msg = document.getElementById('codeMsg');
   const code = input.value.trim().toUpperCase();
@@ -558,16 +677,42 @@ window.activateCode = async () => {
 
     if (!snap.exists()) {
       msg.style.color='#ef4444'; msg.textContent='❌ Code invalide.';
+    } else if (snap.data().revoked) {
+      msg.style.color='#ef4444'; msg.textContent='❌ Code révoqué.';
     } else if (snap.data().used) {
       msg.style.color='#ef4444'; msg.textContent='❌ Code déjà utilisé.';
-    } else if (new Date(snap.data().expiresAt) < new Date()) {
+    } else if (!snap.data().unlimited && snap.data().expiresAt && new Date(snap.data().expiresAt) < new Date()) {
       msg.style.color='#ef4444'; msg.textContent='❌ Code expiré.';
     } else {
-      await updateDoc(ref, { used: true, usedAt: new Date().toISOString(), usedBy: currentUser?.email || 'anonymous' });
-      localStorage.setItem('premiumCode', code);
-      localStorage.setItem('premiumExpiry', snap.data().expiresAt);
-      const exp = new Date(snap.data().expiresAt).toLocaleDateString('fr',{day:'2-digit',month:'long',year:'numeric'});
-      msg.style.color='#059669'; msg.textContent=`✅ Premium activé jusqu'au ${exp} ! Redirection…`;
+      const codeData = snap.data();
+      const isUnlimited = codeData.unlimited === true;
+      const expiry = isUnlimited ? null : new Date(codeData.expiresAt);
+
+      // Marquer le code comme utilisé
+      await updateDoc(ref, {
+        used: true,
+        usedAt: new Date().toISOString(),
+        usedBy: currentUser.email
+      });
+
+      // Sauvegarder le premium sur le compte utilisateur
+      await setDoc(doc(db, 'users', currentUser.uid), {
+        email: currentUser.email,
+        premiumStatus: 'active',
+        unlimited: isUnlimited,
+        premiumPlan: codeData.label,
+        premiumExpiry: isUnlimited ? null : expiry.toISOString(),
+        activatedAt: new Date().toISOString(),
+        activatedCode: code
+      }, { merge: true });
+
+      const expStr = isUnlimited
+        ? 'accès illimité permanent'
+        : `valide jusqu'au ${expiry.toLocaleDateString('fr',{day:'2-digit',month:'long',year:'numeric'})}`;
+
+      msg.style.color='#059669';
+      msg.textContent=`✅ Premium activé — ${expStr} ! Redirection…`;
+
       setTimeout(() => { window.location.href = 'index.html'; }, 2000);
     }
   } catch(e) {
