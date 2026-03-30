@@ -12,10 +12,10 @@
 * { font-family:'Plus Jakarta Sans',sans-serif; }
 
 /* ── NAV AUTH ── */
-.nav-auth { display:flex; align-items:center; gap:0.5rem; }
-.btn-login { padding:0.4rem 1rem; border-radius:8px; font-size:0.84rem; font-weight:600; border:1.5px solid #e5e7eb; background:#fff; color:#374151; cursor:pointer; font-family:inherit; text-decoration:none; transition:all 0.2s; }
+.nav-auth { display:flex; align-items:center; gap:0.4rem; flex-shrink:0; }
+.btn-login { padding:0.4rem 0.8rem; border-radius:8px; font-size:0.82rem; font-weight:600; border:1.5px solid #e5e7eb; background:#fff; color:#374151; cursor:pointer; font-family:inherit; text-decoration:none; transition:all 0.2s; white-space:nowrap; }
 .btn-login:hover { border-color:#4f46e5; color:#4f46e5; }
-.btn-signup { padding:0.4rem 1rem; border-radius:8px; font-size:0.84rem; font-weight:700; background:linear-gradient(135deg,#059669,#10b981); color:#fff; cursor:pointer; font-family:inherit; text-decoration:none; border:none; transition:all 0.2s; }
+.btn-signup { padding:0.4rem 0.8rem; border-radius:8px; font-size:0.82rem; font-weight:700; background:linear-gradient(135deg,#059669,#10b981); color:#fff; cursor:pointer; font-family:inherit; text-decoration:none; border:none; transition:all 0.2s; white-space:nowrap; }
 .btn-signup:hover { opacity:0.9; }
 
 /* ── USER DROPDOWN ── */
@@ -89,19 +89,15 @@
 .gbtn { width:100%; display:flex; align-items:center; justify-content:center; gap:0.65rem; background:#fff; border:1.5px solid #e5e7eb; border-radius:10px; padding:0.72rem; font-size:0.88rem; font-weight:600; cursor:pointer; font-family:inherit; transition:all 0.2s; }
 .gbtn:hover { border-color:#4f46e5; background:#f8f7ff; }
 
-/* ── RESPONSIVE ── */
+/* ── RESPONSIVE (inline overrides) ── */
+@media(max-width:480px) {
+  .nav-auth .btn-login { padding:0.35rem 0.55rem; font-size:0.75rem; }
+  .nav-auth .btn-signup { padding:0.35rem 0.55rem; font-size:0.75rem; }
+  .prem-toast { right:0.75rem; left:0.75rem; max-width:none; font-size:0.8rem; top:68px; }
+  .u-name { display:none; }
+}
 @media(max-width:768px) {
   .u-name { display:none; }
-  .stats-inner { grid-template-columns:repeat(2,1fr); gap:1.5rem; }
-  .stat-num { font-size:1.8rem; }
-  .testi-grid { grid-template-columns:1fr; }
-  .cta-btns { flex-direction:column; align-items:center; }
-  .prem-toast { right:1rem; left:1rem; max-width:none; }
-}
-@media(max-width:480px) {
-  .nav-auth .btn-login { padding:0.4rem 0.6rem; font-size:0.78rem; }
-  .nav-auth .btn-signup { padding:0.4rem 0.6rem; font-size:0.78rem; }
-  .stats-inner { grid-template-columns:1fr 1fr; }
 }
 </style>
 </head>
@@ -180,7 +176,7 @@
     Gratuit · Rapide · Sans limite cachée
   </div>
   <div id="premiumBadge" style="display:none; font-size:0.82rem; font-weight:700; margin-bottom:0.5rem;"></div>
-  <div id="dlCounter" style="display:none; font-size:0.78rem; margin-bottom:0.5rem;"></div>
+  <div id="dlCounter" style="text-align:center; margin-top:12px; font-size:0.82rem; font-family:inherit;"></div>
 
   <h1>Télécharge depuis <span style="color:#ff0000">YouTube</span><br>&amp; <span style="color:#69c9d0">TikTok</span></h1>
   <p class="hero-sub">Colle ton lien, choisis le format — MP4 ou MP3 — et télécharge instantanément.</p>
@@ -205,7 +201,7 @@
         </button>
       </div>
       <div class="fmt-label">Format de téléchargement</div>
-      <div class="format-row">
+      <div class="format-row" id="fmtRow">
         <div class="fmt-chip selected" data-fmt="mp4" data-q="1080" onclick="selectFmt(this)">MP4 1080p HD</div>
         <div class="fmt-chip" data-fmt="mp4" data-q="720" onclick="selectFmt(this)">MP4 720p</div>
         <div class="fmt-chip" data-fmt="mp4" data-q="480" onclick="selectFmt(this)">MP4 480p</div>
