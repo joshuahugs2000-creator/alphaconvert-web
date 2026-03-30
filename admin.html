@@ -24,11 +24,17 @@ body { font-family:'Plus Jakarta Sans',sans-serif; background:#0f0f1a; color:#e5
 .app { display:flex; height:100vh; }
 
 /* SIDEBAR */
-.sidebar { width:300px; background:#1a1a2e; border-right:1px solid #2a2a3e; display:flex; flex-direction:column; flex-shrink:0; }
-.sidebar-header { padding:1rem 1.2rem; border-bottom:1px solid #2a2a3e; display:flex; align-items:center; justify-content:space-between; }
+.sidebar { width:300px; background:#1a1a2e; border-right:1px solid #2a2a3e; display:flex; flex-direction:column; flex-shrink:0; overflow:hidden; }
+.sidebar-header { padding:1rem 1.2rem; border-bottom:1px solid #2a2a3e; display:flex; align-items:center; justify-content:space-between; flex-shrink:0; }
 .sidebar-title { font-weight:800; font-size:0.95rem; }
 .notif-badge { background:#ef4444; color:#fff; font-size:0.7rem; font-weight:700; padding:0.15rem 0.5rem; border-radius:100px; }
-.sessions-list { flex:1; overflow-y:auto; }
+.sidebar-tabs { display:flex; border-bottom:1px solid #2a2a3e; flex-shrink:0; }
+.s-tab { flex:1; padding:0.6rem; font-size:0.8rem; font-weight:700; cursor:pointer; border:none; background:none; color:#6b7280; font-family:inherit; transition:all 0.15s; border-bottom:2px solid transparent; }
+.s-tab.active { color:#a5b4fc; border-bottom-color:#4f46e5; }
+.sidebar-content { flex:1; overflow-y:auto; }
+
+/* SESSIONS */
+.sessions-list { }
 .session-item { padding:1rem 1.2rem; border-bottom:1px solid #2a2a3e; cursor:pointer; transition:background 0.15s; }
 .session-item:hover { background:#252538; }
 .session-item.active { background:#252538; border-left:3px solid #4f46e5; }
@@ -40,10 +46,42 @@ body { font-family:'Plus Jakarta Sans',sans-serif; background:#0f0f1a; color:#e5
 .unread-dot { width:8px; height:8px; border-radius:50%; background:#ef4444; flex-shrink:0; }
 .empty-sessions { padding:2rem; text-align:center; color:#4b5563; font-size:0.85rem; }
 
+/* CODES PANEL */
+.codes-panel { padding:1rem 1.2rem; }
+.codes-panel-title { font-size:0.78rem; font-weight:700; color:#9ca3af; margin-bottom:0.8rem; letter-spacing:0.05em; }
+.code-gen-row { display:flex; flex-direction:column; gap:0.5rem; margin-bottom:0.8rem; }
+.code-select { width:100%; background:#0f0f1a; border:1.5px solid #2a2a3e; border-radius:8px; padding:0.5rem 0.7rem; font-size:0.82rem; font-family:inherit; color:#e5e7eb; outline:none; }
+.code-select:focus { border-color:#4f46e5; }
+.gen-btn { width:100%; padding:0.6rem; background:#f59e0b; color:#000; border:none; border-radius:8px; font-size:0.82rem; font-weight:700; cursor:pointer; font-family:inherit; }
+.gen-btn:hover { background:#d97706; }
+.generated-code-box { display:none; background:#0f0f1a; border:1.5px solid #f59e0b; border-radius:8px; padding:0.8rem; text-align:center; margin-bottom:0.8rem; }
+.code-val { font-size:0.95rem; font-weight:800; color:#f59e0b; letter-spacing:2px; cursor:pointer; }
+.code-val:hover { color:#fbbf24; }
+.code-meta { font-size:0.7rem; color:#6b7280; margin-top:0.3rem; }
+.copy-ok { font-size:0.7rem; color:#10b981; margin-top:0.2rem; display:none; }
+.codes-divider { height:1px; background:#2a2a3e; margin:0.8rem 0; }
+.codes-list-title { font-size:0.75rem; font-weight:700; color:#6b7280; margin-bottom:0.6rem; display:flex; align-items:center; justify-content:space-between; }
+.code-entry { background:#0f0f1a; border:1px solid #2a2a3e; border-radius:8px; padding:0.6rem 0.8rem; margin-bottom:0.4rem; }
+.code-entry-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:0.25rem; }
+.code-entry-val { font-size:0.8rem; font-weight:700; color:#e5e7eb; letter-spacing:1px; }
+.code-entry-badge { font-size:0.65rem; font-weight:700; padding:0.15rem 0.5rem; border-radius:4px; }
+.badge-active { background:#dcfce7; color:#166534; }
+.badge-used { background:#fee2e2; color:#991b1b; }
+.badge-expired { background:#f3f4f6; color:#6b7280; }
+.badge-revoked { background:#fef3c7; color:#92400e; }
+.badge-unlimited { background:#ede9fe; color:#4f46e5; }
+.code-entry-meta { font-size:0.7rem; color:#6b7280; }
+.code-entry-actions { display:flex; gap:0.4rem; margin-top:0.4rem; }
+.code-action-btn { font-size:0.7rem; font-weight:700; padding:0.2rem 0.5rem; border-radius:4px; cursor:pointer; border:none; font-family:inherit; }
+.revoke-btn-sm { background:#fee2e2; color:#991b1b; }
+.revoke-btn-sm:hover { background:#fecaca; }
+.copy-btn-sm { background:#ede9fe; color:#4f46e5; }
+.copy-btn-sm:hover { background:#ddd6fe; }
+
 /* MAIN CHAT */
 .main { flex:1; display:flex; flex-direction:column; overflow:hidden; }
 .main-empty { flex:1; display:flex; align-items:center; justify-content:center; color:#4b5563; font-size:0.9rem; text-align:center; }
-.chat-header { padding:1rem 1.5rem; border-bottom:1px solid #2a2a3e; background:#1a1a2e; display:flex; align-items:center; gap:0.8rem; flex-wrap:wrap; }
+.chat-header { padding:1rem 1.5rem; border-bottom:1px solid #2a2a3e; background:#1a1a2e; display:flex; align-items:center; gap:0.8rem; flex-wrap:wrap; flex-shrink:0; }
 .client-avatar { width:38px; height:38px; border-radius:10px; background:linear-gradient(135deg,#6b7280,#374151); display:flex; align-items:center; justify-content:center; font-size:1.1rem; flex-shrink:0; }
 .client-name { font-weight:700; font-size:0.95rem; }
 .client-plan { font-size:0.78rem; color:#9ca3af; }
@@ -51,10 +89,10 @@ body { font-family:'Plus Jakarta Sans',sans-serif; background:#0f0f1a; color:#e5
 .status-badge { margin-left:auto; display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap; }
 .badge { font-size:0.72rem; font-weight:700; padding:0.25rem 0.7rem; border-radius:100px; }
 .badge-waiting { background:#fef3c7; color:#92400e; }
-.badge-active { background:#dcfce7; color:#166534; }
-.activate-btn { background:#10b981; color:#fff; border:none; border-radius:8px; padding:0.4rem 0.9rem; font-size:0.78rem; font-weight:700; cursor:pointer; font-family:inherit; transition:background 0.2s; }
+.badge-active-hdr { background:#dcfce7; color:#166534; }
+.activate-btn { background:#10b981; color:#fff; border:none; border-radius:8px; padding:0.4rem 0.9rem; font-size:0.78rem; font-weight:700; cursor:pointer; font-family:inherit; }
 .activate-btn:hover { background:#059669; }
-.remove-btn { background:#ef4444; color:#fff; border:none; border-radius:8px; padding:0.4rem 0.9rem; font-size:0.78rem; font-weight:700; cursor:pointer; font-family:inherit; transition:background 0.2s; }
+.remove-btn { background:#ef4444; color:#fff; border:none; border-radius:8px; padding:0.4rem 0.9rem; font-size:0.78rem; font-weight:700; cursor:pointer; font-family:inherit; }
 .remove-btn:hover { background:#dc2626; }
 .chat-messages { flex:1; overflow-y:auto; padding:1.2rem; display:flex; flex-direction:column; gap:0.8rem; }
 .msg { display:flex; gap:0.6rem; align-items:flex-end; max-width:75%; }
@@ -68,17 +106,17 @@ body { font-family:'Plus Jakarta Sans',sans-serif; background:#0f0f1a; color:#e5
 .msg.admin .msg-bubble { background:#4f46e5; color:#fff; border-bottom-right-radius:4px; }
 .msg-time { font-size:0.7rem; color:#4b5563; margin-top:3px; }
 .msg.admin .msg-time { text-align:right; }
-.input-area { padding:1rem 1.2rem; border-top:1px solid #2a2a3e; background:#1a1a2e; display:flex; gap:0.6rem; }
+.input-area { padding:1rem 1.2rem; border-top:1px solid #2a2a3e; background:#1a1a2e; display:flex; gap:0.6rem; flex-shrink:0; }
 .admin-input { flex:1; background:#0f0f1a; border:1.5px solid #2a2a3e; border-radius:10px; padding:0.7rem 1rem; font-size:0.88rem; font-family:inherit; color:#e5e7eb; outline:none; resize:none; }
 .admin-input:focus { border-color:#4f46e5; }
 .send-btn { background:#4f46e5; color:#fff; border:none; border-radius:10px; padding:0.7rem 1.2rem; cursor:pointer; font-size:0.85rem; font-weight:700; font-family:inherit; white-space:nowrap; }
-.quick-btns { padding:0.5rem 1.2rem 0; display:flex; gap:0.5rem; flex-wrap:wrap; }
-.qb { background:#252538; border:1px solid #2a2a3e; color:#9ca3af; font-size:0.75rem; font-weight:600; padding:0.3rem 0.7rem; border-radius:6px; cursor:pointer; font-family:inherit; transition:all 0.15s; }
+.quick-btns { padding:0.5rem 1.2rem 0; display:flex; gap:0.5rem; flex-wrap:wrap; flex-shrink:0; }
+.qb { background:#252538; border:1px solid #2a2a3e; color:#9ca3af; font-size:0.75rem; font-weight:600; padding:0.3rem 0.7rem; border-radius:6px; cursor:pointer; font-family:inherit; }
 .qb:hover { border-color:#4f46e5; color:#a5b4fc; }
 
-/* MODAL */
+/* MODAL ACTIVATION */
 .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.75); display:flex; align-items:center; justify-content:center; z-index:1000; }
-.modal-box { background:#1a1a2e; border:1.5px solid #2a2a3e; border-radius:16px; padding:2rem; width:100%; max-width:420px; }
+.modal-box { background:#1a1a2e; border:1.5px solid #2a2a3e; border-radius:16px; padding:2rem; width:100%; max-width:440px; }
 .modal-box h3 { font-size:1.1rem; font-weight:800; margin-bottom:0.4rem; }
 .modal-box p { color:#6b7280; font-size:0.85rem; margin-bottom:1.5rem; }
 .plan-options { display:grid; grid-template-columns:1fr 1fr; gap:0.8rem; margin-bottom:1.5rem; }
@@ -90,10 +128,17 @@ body { font-family:'Plus Jakarta Sans',sans-serif; background:#0f0f1a; color:#e5
 .plan-option.selected .plan-exp { color:#6ee7b7; }
 .modal-actions { display:flex; gap:0.8rem; }
 .modal-confirm { flex:1; padding:0.8rem; background:#10b981; color:#fff; border:none; border-radius:10px; font-size:0.9rem; font-weight:700; cursor:pointer; font-family:inherit; }
-.modal-confirm:hover { background:#059669; }
 .modal-confirm:disabled { background:#374151; cursor:not-allowed; }
 .modal-cancel { padding:0.8rem 1.2rem; background:#252538; color:#9ca3af; border:none; border-radius:10px; font-size:0.9rem; font-weight:700; cursor:pointer; font-family:inherit; }
-.modal-cancel:hover { background:#2a2a3e; }
+
+/* MODAL CONFIRMATION */
+.confirm-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.75); display:flex; align-items:center; justify-content:center; z-index:1001; }
+.confirm-box { background:#1a1a2e; border:1.5px solid #ef4444; border-radius:16px; padding:1.8rem; width:100%; max-width:360px; text-align:center; }
+.confirm-box h3 { font-size:1rem; font-weight:800; margin-bottom:0.5rem; }
+.confirm-box p { color:#6b7280; font-size:0.85rem; margin-bottom:1.5rem; }
+.confirm-actions { display:flex; gap:0.8rem; }
+.confirm-yes { flex:1; padding:0.75rem; background:#ef4444; color:#fff; border:none; border-radius:10px; font-size:0.88rem; font-weight:700; cursor:pointer; font-family:inherit; }
+.confirm-no { flex:1; padding:0.75rem; background:#252538; color:#9ca3af; border:none; border-radius:10px; font-size:0.88rem; font-weight:700; cursor:pointer; font-family:inherit; }
 </style>
 </head>
 <body>
@@ -113,28 +158,44 @@ body { font-family:'Plus Jakarta Sans',sans-serif; background:#0f0f1a; color:#e5
 <div class="modal-overlay" id="activateModal" style="display:none;">
   <div class="modal-box">
     <h3>⚡ Activer le Premium</h3>
-    <p>Choisis la durée réelle du plan pour ce client :</p>
+    <p>Choisis la durée pour ce client :</p>
     <div class="plan-options">
-      <div class="plan-option" onclick="selectPlan(this,1)" id="opt-1">
+      <div class="plan-option" onclick="selectPlanModal(this,1)" id="opt-1">
         <div class="plan-dur">1 Mois</div>
         <div class="plan-exp" id="exp-1">—</div>
       </div>
-      <div class="plan-option" onclick="selectPlan(this,3)" id="opt-3">
+      <div class="plan-option" onclick="selectPlanModal(this,3)" id="opt-3">
         <div class="plan-dur">3 Mois</div>
         <div class="plan-exp" id="exp-3">—</div>
       </div>
-      <div class="plan-option" onclick="selectPlan(this,6)" id="opt-6">
+      <div class="plan-option" onclick="selectPlanModal(this,6)" id="opt-6">
         <div class="plan-dur">6 Mois</div>
         <div class="plan-exp" id="exp-6">—</div>
       </div>
-      <div class="plan-option" onclick="selectPlan(this,12)" id="opt-12">
+      <div class="plan-option" onclick="selectPlanModal(this,12)" id="opt-12">
         <div class="plan-dur">1 An</div>
         <div class="plan-exp" id="exp-12">—</div>
       </div>
+      <div class="plan-option" onclick="selectPlanModal(this,0)" id="opt-0" style="grid-column:span 2;">
+        <div class="plan-dur">♾️ Illimité</div>
+        <div class="plan-exp" id="exp-0">Accès permanent</div>
+      </div>
     </div>
     <div class="modal-actions">
-      <button class="modal-cancel" onclick="closeModal()">Annuler</button>
+      <button class="modal-cancel" onclick="closeActivateModal()">Annuler</button>
       <button class="modal-confirm" id="confirmBtn" onclick="confirmActivation()" disabled>✅ Confirmer</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL CONFIRMATION RÉVOCATION -->
+<div class="confirm-overlay" id="revokeConfirm" style="display:none;">
+  <div class="confirm-box">
+    <h3>⚠️ Révoquer ce code ?</h3>
+    <p>Le code sera désactivé immédiatement. Cette action est irréversible.</p>
+    <div class="confirm-actions">
+      <button class="confirm-no" onclick="closeRevokeConfirm()">Annuler</button>
+      <button class="confirm-yes" onclick="doRevoke()">Révoquer</button>
     </div>
   </div>
 </div>
@@ -143,27 +204,47 @@ body { font-family:'Plus Jakarta Sans',sans-serif; background:#0f0f1a; color:#e5
 <div class="app" id="app" style="display:none;">
   <div class="sidebar">
     <div class="sidebar-header">
-      <span class="sidebar-title">💬 Demandes Premium</span>
+      <span class="sidebar-title">👑 Admin AlphaConvert</span>
       <span class="notif-badge" id="notifBadge" style="display:none">0</span>
     </div>
-    <div class="sessions-list" id="sessionsList">
-      <div class="empty-sessions">Aucune demande pour l'instant</div>
+    <div class="sidebar-tabs">
+      <button class="s-tab active" id="tabMsg" onclick="switchSideTab('messages')">💬 Messages</button>
+      <button class="s-tab" id="tabCodes" onclick="switchSideTab('codes')">🔑 Codes</button>
     </div>
-    <!-- GENERATEUR DE CODES -->
-    <div style="padding:1rem 1.2rem; border-top:1px solid #2a2a3e;">
-      <div style="font-size:0.78rem; font-weight:700; color:#9ca3af; margin-bottom:0.7rem;">🔑 GÉNÉRER UN CODE PREMIUM</div>
-      <select id="codeDuration" style="width:100%; background:#0f0f1a; border:1.5px solid #2a2a3e; border-radius:8px; padding:0.5rem 0.7rem; font-size:0.82rem; font-family:inherit; color:#e5e7eb; outline:none; margin-bottom:0.6rem;">
-        <option value="1">1 Mois</option>
-        <option value="3">3 Mois</option>
-        <option value="6">6 Mois</option>
-        <option value="12">1 An</option>
-      </select>
-      <button onclick="generateCode()" style="width:100%; padding:0.6rem; background:#f59e0b; color:#000; border:none; border-radius:8px; font-size:0.82rem; font-weight:700; cursor:pointer; font-family:inherit;">⚡ Générer le code</button>
-      <div id="generatedCode" style="display:none; margin-top:0.8rem; background:#0f0f1a; border:1.5px solid #f59e0b; border-radius:8px; padding:0.7rem; text-align:center;">
-        <div style="font-size:0.7rem; color:#9ca3af; margin-bottom:0.3rem;">Code généré — copie et envoie au client :</div>
-        <div id="codeValue" style="font-size:0.95rem; font-weight:800; color:#f59e0b; letter-spacing:2px; cursor:pointer;" onclick="copyCode()" title="Cliquer pour copier"></div>
-        <div id="codeExpiry" style="font-size:0.7rem; color:#6b7280; margin-top:0.3rem;"></div>
-        <div id="copyMsg" style="font-size:0.7rem; color:#10b981; margin-top:0.2rem; display:none;">✅ Copié !</div>
+    <div class="sidebar-content">
+      <!-- MESSAGES TAB -->
+      <div id="tabMessagesContent">
+        <div class="sessions-list" id="sessionsList">
+          <div class="empty-sessions">Aucune demande pour l'instant</div>
+        </div>
+      </div>
+      <!-- CODES TAB -->
+      <div id="tabCodesContent" style="display:none;">
+        <div class="codes-panel">
+          <div class="codes-panel-title">🔑 GÉNÉRER UN CODE PREMIUM</div>
+          <div class="code-gen-row">
+            <select id="codeDuration" class="code-select">
+              <option value="1">1 Mois — 5$</option>
+              <option value="3">3 Mois — 12$</option>
+              <option value="6">6 Mois — 20$</option>
+              <option value="12">1 An — 35$</option>
+              <option value="0">♾️ Illimité</option>
+            </select>
+            <button class="gen-btn" onclick="generateCode()">⚡ Générer le code</button>
+          </div>
+          <div id="generatedCodeBox" class="generated-code-box">
+            <div style="font-size:0.7rem; color:#9ca3af; margin-bottom:0.3rem;">Code généré — clique pour copier :</div>
+            <div id="codeVal" class="code-val" onclick="copyGeneratedCode()" title="Copier"></div>
+            <div id="codeMeta" class="code-meta"></div>
+            <div id="copyOk" class="copy-ok">✅ Copié !</div>
+          </div>
+          <div class="codes-divider"></div>
+          <div class="codes-list-title">
+            <span>Codes générés</span>
+            <span id="codesCount" style="color:#4b5563;">0</span>
+          </div>
+          <div id="codesList"></div>
+        </div>
       </div>
     </div>
   </div>
@@ -172,7 +253,7 @@ body { font-family:'Plus Jakarta Sans',sans-serif; background:#0f0f1a; color:#e5
     <div class="main-empty" id="mainEmpty">
       <div>
         <div style="font-size:3rem;margin-bottom:1rem">💬</div>
-        <div>Sélectionne une conversation</div>
+        <div>Sélectionne une conversation<br><span style="font-size:0.8rem;color:#374151;">ou génère un code dans l'onglet Codes</span></div>
       </div>
     </div>
     <div id="chatArea" style="display:none; flex-direction:column; flex:1; overflow:hidden;">
@@ -190,7 +271,8 @@ body { font-family:'Plus Jakarta Sans',sans-serif; background:#0f0f1a; color:#e5
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getFirestore, collection, addDoc, onSnapshot, query, orderBy,
-         serverTimestamp, doc, setDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+         serverTimestamp, doc, setDoc, updateDoc, getDoc, getDocs, deleteDoc }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyBJgtQp4ZrOPuUhmwiQw6FmOvt7nywudOc",
@@ -201,8 +283,7 @@ const firebaseConfig = {
   appId: "1:599445275974:web:9c19afd3c4f8219e3f9147"
 };
 
-const ADMIN_PASSWORD = 'alphaadmin2026'; // ← change ici
-
+const ADMIN_PASSWORD = 'alphaadmin2026';
 const fbApp = initializeApp(firebaseConfig);
 const db = getFirestore(fbApp);
 
@@ -210,15 +291,25 @@ let currentSession = null;
 let msgUnsub = null;
 let sessions = {};
 let selectedMonths = null;
+let codeToRevoke = null;
 
-// ── LOGIN ──────────────────────────────────────────────────────
+// ── SIDEBAR TABS ───────────────────────────────────────────
+window.switchSideTab = (tab) => {
+  document.getElementById('tabMsg').classList.toggle('active', tab === 'messages');
+  document.getElementById('tabCodes').classList.toggle('active', tab === 'codes');
+  document.getElementById('tabMessagesContent').style.display = tab === 'messages' ? 'block' : 'none';
+  document.getElementById('tabCodesContent').style.display = tab === 'codes' ? 'block' : 'none';
+  if (tab === 'codes') loadCodesList();
+};
+
+// ── LOGIN ──────────────────────────────────────────────────
 window.login = function() {
   const pw = document.getElementById('adminPassword').value;
   if (pw === ADMIN_PASSWORD) {
     document.getElementById('loginScreen').style.display = 'none';
     document.getElementById('app').style.display = 'flex';
     requestNotifPermission();
-  startListening();
+    startListening();
   } else {
     document.getElementById('loginError').style.display = 'block';
   }
@@ -227,7 +318,7 @@ document.getElementById('adminPassword').addEventListener('keydown', e => {
   if (e.key === 'Enter') window.login();
 });
 
-// ── NOTIFICATIONS NAVIGATEUR ─────────────────────────────────
+// ── NOTIFICATIONS ─────────────────────────────────────────
 let prevUnread = parseInt(sessionStorage.getItem('prevUnread') || '0');
 
 function requestNotifPermission() {
@@ -241,28 +332,23 @@ function playSound() {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
-    osc.connect(gain);
-    gain.connect(ctx.destination);
+    osc.connect(gain); gain.connect(ctx.destination);
     osc.frequency.setValueAtTime(880, ctx.currentTime);
     osc.frequency.setValueAtTime(660, ctx.currentTime + 0.1);
     gain.gain.setValueAtTime(0.3, ctx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
-    osc.start(ctx.currentTime);
-    osc.stop(ctx.currentTime + 0.4);
+    osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.4);
   } catch(e) {}
 }
 
 function sendBrowserNotif(text) {
   if ('Notification' in window && Notification.permission === 'granted') {
-    const n = new Notification('💬 Nouveau message — AlphaConvert', {
-      body: text,
-      icon: '/favicon.ico',
-    });
+    const n = new Notification('💬 Nouveau message — AlphaConvert', { body: text });
     setTimeout(() => n.close(), 5000);
   }
 }
 
-// ── FIRESTORE ─────────────────────────────────────────────────
+// ── FIRESTORE SESSIONS ────────────────────────────────────
 function startListening() {
   onSnapshot(collection(db, 'sessions'), snapshot => {
     snapshot.docChanges().forEach(ch => {
@@ -274,11 +360,10 @@ function startListening() {
     badge.style.display = unread > 0 ? 'inline' : 'none';
     badge.textContent = unread;
     document.title = unread > 0 ? `(${unread}) Admin — AlphaConvert` : 'Admin — AlphaConvert';
-    // Notif si nouveau message
     if (unread > prevUnread) {
       playSound();
-      const newSessions = Object.values(sessions).filter(s => s.hasNewMessage);
-      const last = newSessions[newSessions.length - 1];
+      const newS = Object.values(sessions).filter(s => s.hasNewMessage);
+      const last = newS[newS.length - 1];
       sendBrowserNotif(last?.lastMessage || 'Un client attend une réponse.');
     }
     prevUnread = unread;
@@ -286,7 +371,7 @@ function startListening() {
   });
 }
 
-// ── SIDEBAR ───────────────────────────────────────────────────
+// ── SIDEBAR SESSIONS ──────────────────────────────────────
 function renderSessions() {
   const list = document.getElementById('sessionsList');
   const sorted = Object.values(sessions).sort((a, b) => {
@@ -300,30 +385,30 @@ function renderSessions() {
   }
   list.innerHTML = sorted.map(s => {
     let sub = '⏳ En attente';
-    if (s.status === 'active' && s.expiresAt) {
-      sub = `✅ Expire le ${new Date(s.expiresAt).toLocaleDateString('fr')}`;
+    if (s.status === 'active') {
+      if (s.unlimited) sub = '♾️ Accès illimité';
+      else if (s.expiresAt) sub = `✅ Expire le ${new Date(s.expiresAt).toLocaleDateString('fr')}`;
     }
+    const name = s.userEmail ? s.userEmail.split('@')[0] : `Client ${s.id.substring(0,6)}`;
     return `<div class="session-item ${s.id===currentSession?'active':''} ${s.hasNewMessage?'unread':''}" onclick="openSession('${s.id}')">
-      <div class="session-name">👤 Client <span class="session-plan">${s.plan||'?'} — ${s.amount||'?'}</span>${s.hasNewMessage?'<span class="unread-dot"></span>':''}</div>
-      <div class="session-preview">${s.lastMessage||'Nouvelle demande'}</div>
+      <div class="session-name">👤 ${esc(name)} ${s.hasNewMessage?'<span class="unread-dot"></span>':''}
+        ${s.plan ? `<span class="session-plan">${s.plan}</span>` : ''}
+      </div>
+      <div class="session-preview">${esc(s.lastMessage||'Nouvelle demande')}</div>
       <div class="session-time">${sub}</div>
     </div>`;
   }).join('');
 }
 
-// ── OPEN CHAT ─────────────────────────────────────────────────
+// ── OPEN CHAT ─────────────────────────────────────────────
 window.openSession = async function(sessionId) {
   currentSession = sessionId;
-  const s = sessions[sessionId];
   await updateDoc(doc(db, 'sessions', sessionId), { hasNewMessage: false });
-
   document.getElementById('mainEmpty').style.display = 'none';
   const chatArea = document.getElementById('chatArea');
   chatArea.style.display = 'flex';
-
   buildHeader(sessionId);
   buildQuickBtns();
-
   if (msgUnsub) msgUnsub();
   const q = query(collection(db, 'sessions', sessionId, 'messages'), orderBy('timestamp', 'asc'));
   msgUnsub = onSnapshot(q, snap => {
@@ -339,10 +424,15 @@ function buildHeader(sessionId) {
   const s = sessions[sessionId];
   let expiryLine = '';
   let btn = '';
+  const name = s.userEmail ? s.userEmail : `Client ${s.id.substring(0,8)}`;
 
   if (s.status === 'active') {
-    const exp = s.expiresAt ? new Date(s.expiresAt).toLocaleDateString('fr', {day:'2-digit',month:'long',year:'numeric'}) : '?';
-    expiryLine = `<div class="expiry-info">📅 ${s.activeDuration||'?'} — expire le ${exp}</div>`;
+    if (s.unlimited) {
+      expiryLine = `<div class="expiry-info">♾️ Accès illimité</div>`;
+    } else if (s.expiresAt) {
+      const exp = new Date(s.expiresAt).toLocaleDateString('fr',{day:'2-digit',month:'long',year:'numeric'});
+      expiryLine = `<div class="expiry-info">📅 ${s.activeDuration||'?'} — expire le ${exp}</div>`;
+    }
     btn = `<button class="remove-btn" onclick="removePremium('${sessionId}')">❌ Retirer Premium</button>`;
   } else {
     btn = `<button class="activate-btn" onclick="openActivateModal('${sessionId}')">⚡ Activer Premium</button>`;
@@ -351,12 +441,12 @@ function buildHeader(sessionId) {
   document.getElementById('chatHeader').innerHTML = `
     <div class="client-avatar">👤</div>
     <div>
-      <div class="client-name">Client — ${s.id.substring(0,12)}…</div>
-      <div class="client-plan">Plan demandé : ${s.plan||'?'} (${s.amount||'?'})</div>
+      <div class="client-name">${esc(name)}</div>
+      <div class="client-plan">Plan demandé : ${esc(s.plan||'Non précisé')}</div>
       ${expiryLine}
     </div>
     <div class="status-badge">
-      <span class="badge ${s.status==='active'?'badge-active':'badge-waiting'}">
+      <span class="badge ${s.status==='active'?'badge-active-hdr':'badge-waiting'}">
         ${s.status==='active'?'✅ Premium actif':'⏳ En attente'}
       </span>
       ${btn}
@@ -365,14 +455,14 @@ function buildHeader(sessionId) {
 
 function buildQuickBtns() {
   document.getElementById('quickBtns').innerHTML = `
-    <button class="qb" onclick="quickReply('Bonjour ! Pour activer votre accès, envoyez le montant en USDT TRC-20 à cette adresse : [TON_ADRESSE]. Envoie-moi ensuite le hash de transaction.')">📋 Adresse paiement</button>
+    <button class="qb" onclick="quickReply('Bonjour ! Pour activer votre accès Premium, veuillez effectuer le paiement puis entrer votre code sur la page Premium.')">💳 Infos paiement</button>
     <button class="qb" onclick="quickReply('Bonjour ! Je suis disponible, comment puis-je vous aider ?')">👋 Saluer</button>
     <button class="qb" onclick="quickReply('Votre paiement est en cours de vérification, merci de patienter quelques minutes ⏳')">⏳ Vérification</button>
-    <button class="qb" onclick="quickReply('Paiement reçu et vérifié ✅ Je procède à l\'activation maintenant !')">✅ Paiement reçu</button>
+    <button class="qb" onclick="quickReply('Paiement reçu et vérifié ✅ Je génère votre code d\'accès maintenant !')">✅ Paiement reçu</button>
   `;
 }
 
-// ── MESSAGES ──────────────────────────────────────────────────
+// ── MESSAGES ──────────────────────────────────────────────
 function renderMsg(msg) {
   const c = document.getElementById('chatMessages');
   const div = document.createElement('div');
@@ -403,10 +493,11 @@ document.getElementById('adminInput').addEventListener('keydown', e => {
   if (e.key==='Enter' && !e.shiftKey) { e.preventDefault(); window.sendReply(); }
 });
 
-// ── MODAL ACTIVATION ──────────────────────────────────────────
-function addMonths(n) {
+// ── MODAL ACTIVATION ──────────────────────────────────────
+function calcExpiry(months) {
+  if (months === 0) return null; // illimité
   const d = new Date();
-  d.setMonth(d.getMonth() + n);
+  d.setMonth(d.getMonth() + months);
   return d;
 }
 
@@ -417,105 +508,172 @@ window.openActivateModal = function(sessionId) {
   document.querySelectorAll('.plan-option').forEach(el => el.classList.remove('selected'));
 
   [1,3,6,12].forEach(m => {
-    const exp = addMonths(m).toLocaleDateString('fr', {day:'2-digit', month:'short', year:'numeric'});
+    const exp = calcExpiry(m).toLocaleDateString('fr', {day:'2-digit', month:'short', year:'numeric'});
     document.getElementById(`exp-${m}`).textContent = `Expire le ${exp}`;
   });
 
   document.getElementById('activateModal').style.display = 'flex';
 };
 
-window.selectPlan = function(el, months) {
+window.selectPlanModal = function(el, months) {
   document.querySelectorAll('.plan-option').forEach(o => o.classList.remove('selected'));
   el.classList.add('selected');
   selectedMonths = months;
   document.getElementById('confirmBtn').disabled = false;
 };
 
-window.closeModal = function() {
+window.closeActivateModal = function() {
   document.getElementById('activateModal').style.display = 'none';
   selectedMonths = null;
 };
 
 window.confirmActivation = async function() {
-  if (!selectedMonths) return;
-  const expiry = addMonths(selectedMonths);
-  const expiryStr = expiry.toLocaleDateString('fr', {day:'2-digit', month:'long', year:'numeric'});
-  const label = selectedMonths === 12 ? '1 An' : selectedMonths === 1 ? '1 Mois' : `${selectedMonths} Mois`;
+  if (selectedMonths === null) return;
+  const isUnlimited = selectedMonths === 0;
+  const expiry = isUnlimited ? null : calcExpiry(selectedMonths);
+  const label = isUnlimited ? 'Illimité' : selectedMonths === 12 ? '1 An' : selectedMonths === 1 ? '1 Mois' : `${selectedMonths} Mois`;
+  const expiryStr = isUnlimited ? 'indéfinie' : expiry.toLocaleDateString('fr', {day:'2-digit',month:'long',year:'numeric'});
 
   await updateDoc(doc(db,'sessions',currentSession), {
     status: 'active',
     activeDuration: label,
-    expiresAt: expiry.toISOString()
+    unlimited: isUnlimited,
+    expiresAt: isUnlimited ? null : expiry.toISOString()
   });
+
+  const msgTxt = isUnlimited
+    ? `🎉 Votre compte Premium Illimité est activé ! Accès permanent sans expiration. Profitez-en !`
+    : `🎉 Votre compte Premium est activé ! Plan : ${label}. Accès valable jusqu'au ${expiryStr}.`;
 
   await addDoc(collection(db,'sessions',currentSession,'messages'), {
-    text: `🎉 Votre compte Premium est maintenant activé ! Plan : ${label}. Accès valable jusqu'au ${expiryStr}. Profitez-en bien !`,
-    sender: 'admin',
-    timestamp: serverTimestamp()
+    text: msgTxt, sender:'admin', timestamp:serverTimestamp()
   });
 
-  sessions[currentSession] = { ...sessions[currentSession], status:'active', activeDuration:label, expiresAt:expiry.toISOString() };
-  closeModal();
+  sessions[currentSession] = { ...sessions[currentSession], status:'active', activeDuration:label, unlimited:isUnlimited, expiresAt: isUnlimited ? null : expiry.toISOString() };
+  closeActivateModal();
   openSession(currentSession);
 };
 
-// ── RETIRER PREMIUM ───────────────────────────────────────────
+// ── RETIRER PREMIUM ───────────────────────────────────────
 window.removePremium = async function(sessionId) {
   if (!confirm('Retirer le Premium de ce client ?')) return;
-
-  await updateDoc(doc(db,'sessions',sessionId), { status:'waiting', activeDuration:null, expiresAt:null });
-
+  await updateDoc(doc(db,'sessions',sessionId), { status:'waiting', activeDuration:null, expiresAt:null, unlimited:false });
   await addDoc(collection(db,'sessions',sessionId,'messages'), {
     text: '⚠️ Votre accès Premium a été désactivé. Contactez-nous si vous pensez que c\'est une erreur.',
-    sender: 'admin',
-    timestamp: serverTimestamp()
+    sender:'admin', timestamp:serverTimestamp()
   });
-
-  sessions[sessionId] = { ...sessions[sessionId], status:'waiting', activeDuration:null, expiresAt:null };
+  sessions[sessionId] = { ...sessions[sessionId], status:'waiting', activeDuration:null, expiresAt:null, unlimited:false };
   openSession(sessionId);
 };
 
-// ── UTILS ─────────────────────────────────────────────────────
-function esc(str) {
-  return (str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
-}
-
-// ── GENERATE PREMIUM CODE ─────────────────────────────────────
+// ── GENERATE CODE ─────────────────────────────────────────
 window.generateCode = async function() {
   const months = parseInt(document.getElementById('codeDuration').value);
-  // Générer code aléatoire : ALPHA-XXXX-XXXX
+  const isUnlimited = months === 0;
+
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   const rand = (n) => Array.from({length:n}, () => chars[Math.floor(Math.random()*chars.length)]).join('');
   const code = `ALPHA-${rand(4)}-${rand(4)}`;
 
-  const expiry = new Date();
-  expiry.setMonth(expiry.getMonth() + months);
-  const label = months === 12 ? '1 An' : months === 1 ? '1 Mois' : `${months} Mois`;
+  const expiry = isUnlimited ? null : (() => { const d = new Date(); d.setMonth(d.getMonth()+months); return d; })();
+  const label = isUnlimited ? 'Illimité' : months === 12 ? '1 An' : months === 1 ? '1 Mois' : `${months} Mois`;
 
-  // Sauvegarder dans Firebase
   await setDoc(doc(db, 'premiumCodes', code), {
-    code,
-    label,
-    months,
-    expiresAt: expiry.toISOString(),
-    used: false,
+    code, label, months,
+    unlimited: isUnlimited,
+    expiresAt: isUnlimited ? null : expiry.toISOString(),
+    used: false, revoked: false,
     createdAt: new Date().toISOString()
   });
 
-  // Afficher
-  document.getElementById('codeValue').textContent = code;
-  document.getElementById('codeExpiry').textContent = `${label} — expire le ${expiry.toLocaleDateString('fr', {day:'2-digit', month:'long', year:'numeric'})}`;
-  document.getElementById('generatedCode').style.display = 'block';
-  document.getElementById('copyMsg').style.display = 'none';
+  document.getElementById('codeVal').textContent = code;
+  document.getElementById('codeMeta').textContent = isUnlimited
+    ? '♾️ Illimité — sans expiration'
+    : `${label} — expire le ${expiry.toLocaleDateString('fr',{day:'2-digit',month:'long',year:'numeric'})}`;
+  document.getElementById('generatedCodeBox').style.display = 'block';
+  document.getElementById('copyOk').style.display = 'none';
+
+  loadCodesList();
 };
 
-window.copyCode = function() {
-  const code = document.getElementById('codeValue').textContent;
+window.copyGeneratedCode = function() {
+  const code = document.getElementById('codeVal').textContent;
   navigator.clipboard.writeText(code).then(() => {
-    document.getElementById('copyMsg').style.display = 'block';
-    setTimeout(() => document.getElementById('copyMsg').style.display = 'none', 2000);
+    document.getElementById('copyOk').style.display = 'block';
+    setTimeout(() => document.getElementById('copyOk').style.display = 'none', 2000);
   });
 };
+
+// ── CODES LIST ────────────────────────────────────────────
+async function loadCodesList() {
+  const snap = await getDocs(collection(db, 'premiumCodes'));
+  const codes = [];
+  snap.forEach(d => codes.push(d.data()));
+  codes.sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+  document.getElementById('codesCount').textContent = codes.length;
+
+  const list = document.getElementById('codesList');
+  if (!codes.length) { list.innerHTML = '<div style="color:#4b5563;font-size:0.8rem;text-align:center;padding:1rem;">Aucun code généré</div>'; return; }
+
+  list.innerHTML = codes.map(c => {
+    let badgeClass = 'badge-active';
+    let badgeLabel = '✅ Actif';
+    const now = new Date();
+
+    if (c.revoked) { badgeClass = 'badge-revoked'; badgeLabel = '🚫 Révoqué'; }
+    else if (c.used) { badgeClass = 'badge-used'; badgeLabel = '✔ Utilisé'; }
+    else if (!c.unlimited && c.expiresAt && new Date(c.expiresAt) < now) { badgeClass = 'badge-expired'; badgeLabel = '⌛ Expiré'; }
+    else if (c.unlimited) { badgeClass = 'badge-unlimited'; badgeLabel = '♾️ Illimité'; }
+
+    const expiryText = c.unlimited ? 'Sans expiration' : c.expiresAt ? `Exp: ${new Date(c.expiresAt).toLocaleDateString('fr')}` : '—';
+    const usedText = c.used && c.usedBy ? `Utilisé par: ${c.usedBy}` : '';
+    const canRevoke = !c.revoked && !c.used;
+
+    return `<div class="code-entry">
+      <div class="code-entry-top">
+        <span class="code-entry-val">${c.code}</span>
+        <span class="code-entry-badge ${badgeClass}">${badgeLabel}</span>
+      </div>
+      <div class="code-entry-meta">${c.label} · ${expiryText}${usedText ? ' · '+usedText : ''}</div>
+      <div class="code-entry-actions">
+        <button class="code-action-btn copy-btn-sm" onclick="copyCode('${c.code}')">📋 Copier</button>
+        ${canRevoke ? `<button class="code-action-btn revoke-btn-sm" onclick="confirmRevoke('${c.code}')">🚫 Révoquer</button>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+window.copyCode = function(code) {
+  navigator.clipboard.writeText(code).then(() => {
+    const btn = event.target;
+    btn.textContent = '✅ Copié !';
+    setTimeout(() => btn.textContent = '📋 Copier', 1500);
+  });
+};
+
+// ── RÉVOCATION ────────────────────────────────────────────
+window.confirmRevoke = function(code) {
+  codeToRevoke = code;
+  document.getElementById('revokeConfirm').style.display = 'flex';
+};
+
+window.closeRevokeConfirm = function() {
+  document.getElementById('revokeConfirm').style.display = 'none';
+  codeToRevoke = null;
+};
+
+window.doRevoke = async function() {
+  if (!codeToRevoke) return;
+  await updateDoc(doc(db, 'premiumCodes', codeToRevoke), { revoked: true, revokedAt: new Date().toISOString() });
+  closeRevokeConfirm();
+  loadCodesList();
+};
+
+// ── UTILS ─────────────────────────────────────────────────
+function esc(str) {
+  return (str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+}
 </script>
 </body>
 </html>
