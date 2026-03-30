@@ -5,144 +5,134 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AlphaConvert — Téléchargeur YouTube & TikTok</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
 <style>
-/* ── AUTH NAV ── */
-.nav-auth { display:flex; align-items:center; gap:0.6rem; }
-.btn-login {
-  padding:0.45rem 1.1rem; border-radius:8px; font-size:0.85rem; font-weight:600;
-  border:1.5px solid #e5e7eb; background:#fff; color:#374151; cursor:pointer;
-  font-family:inherit; text-decoration:none; transition:all 0.2s;
-}
+/* ── FONTS ── */
+h1,h2,h3,h4,.logo,.step-num { font-family:'Syne',sans-serif; }
+body { font-family:'DM Sans',sans-serif; }
+
+/* ── NAV AUTH ── */
+.nav-auth { display:flex; align-items:center; gap:0.5rem; }
+.btn-login { padding:0.4rem 1rem; border-radius:8px; font-size:0.84rem; font-weight:600; border:1.5px solid #e5e7eb; background:#fff; color:#374151; cursor:pointer; font-family:inherit; text-decoration:none; transition:all 0.2s; }
 .btn-login:hover { border-color:#4f46e5; color:#4f46e5; }
-.btn-signup {
-  padding:0.45rem 1.1rem; border-radius:8px; font-size:0.85rem; font-weight:700;
-  background:linear-gradient(135deg,#059669,#10b981); color:#fff; cursor:pointer;
-  font-family:inherit; text-decoration:none; border:none; transition:all 0.2s;
-}
-.btn-signup:hover { opacity:0.9; transform:translateY(-1px); }
+.btn-signup { padding:0.4rem 1rem; border-radius:8px; font-size:0.84rem; font-weight:700; background:linear-gradient(135deg,#059669,#10b981); color:#fff; cursor:pointer; font-family:inherit; text-decoration:none; border:none; transition:all 0.2s; }
+.btn-signup:hover { opacity:0.9; }
 
-/* ── USER MENU ── */
-.user-menu-wrap { position:relative; }
-.user-trigger {
-  display:flex; align-items:center; gap:0.5rem; cursor:pointer;
-  padding:0.3rem 0.6rem 0.3rem 0.3rem; border-radius:100px;
-  border:1.5px solid #e5e7eb; background:#fff; transition:all 0.2s;
-}
+/* ── USER DROPDOWN ── */
+.user-wrap { position:relative; }
+.user-trigger { display:flex; align-items:center; gap:0.5rem; cursor:pointer; padding:0.3rem 0.7rem 0.3rem 0.3rem; border-radius:100px; border:1.5px solid #e5e7eb; background:#fff; transition:all 0.2s; }
 .user-trigger:hover { border-color:#4f46e5; }
-.user-avatar {
-  width:30px; height:30px; border-radius:50%;
-  background:linear-gradient(135deg,#4f46e5,#7c3aed);
-  display:flex; align-items:center; justify-content:center;
-  color:#fff; font-size:0.78rem; font-weight:700; flex-shrink:0;
-}
-.user-name { font-size:0.82rem; font-weight:600; color:#374151; max-width:100px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.premium-dot { width:8px; height:8px; border-radius:50%; background:#f59e0b; flex-shrink:0; }
-.hamburger-icon { display:flex; flex-direction:column; gap:4px; padding:0.2rem; }
-.hamburger-icon span { display:block; width:16px; height:1.5px; background:#9ca3af; border-radius:2px; transition:all 0.2s; }
-
-/* ── DROPDOWN ── */
-.user-dropdown {
-  position:absolute; top:calc(100% + 8px); right:0;
-  background:#fff; border:1.5px solid #e5e7eb; border-radius:14px;
-  box-shadow:0 12px 40px rgba(0,0,0,0.12); min-width:220px;
-  padding:0.5rem; display:none; z-index:200;
-  animation:dropIn 0.15s ease;
-}
+.u-avatar { width:30px; height:30px; border-radius:50%; background:linear-gradient(135deg,#4f46e5,#7c3aed); display:flex; align-items:center; justify-content:center; color:#fff; font-size:0.78rem; font-weight:700; flex-shrink:0; }
+.u-name { font-size:0.82rem; font-weight:600; color:#374151; max-width:90px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.prem-dot { width:7px; height:7px; border-radius:50%; background:#f59e0b; flex-shrink:0; }
+.burger-lines { display:flex; flex-direction:column; gap:3px; padding:0.2rem; }
+.burger-lines span { display:block; width:14px; height:1.5px; background:#9ca3af; border-radius:2px; }
+.dropdown { position:absolute; top:calc(100% + 8px); right:0; background:#fff; border:1.5px solid #e5e7eb; border-radius:14px; box-shadow:0 12px 40px rgba(0,0,0,0.12); min-width:210px; padding:0.4rem; display:none; z-index:200; }
+.dropdown.open { display:block; animation:dropIn 0.15s ease; }
 @keyframes dropIn { from{opacity:0;transform:translateY(-8px)} to{opacity:1;transform:translateY(0)} }
-.user-dropdown.open { display:block; }
-.dropdown-header { padding:0.8rem 0.9rem 0.6rem; border-bottom:1px solid #f0f0f5; margin-bottom:0.3rem; }
-.dropdown-name { font-size:0.9rem; font-weight:700; color:#0f0f1a; }
-.dropdown-email { font-size:0.75rem; color:#9ca3af; margin-top:1px; }
-.dropdown-plan {
-  display:inline-flex; align-items:center; gap:0.35rem;
-  margin-top:0.4rem; background:#fef3c7; color:#92400e;
-  font-size:0.72rem; font-weight:700; padding:0.2rem 0.6rem; border-radius:100px;
-}
-.dropdown-plan.free { background:#f3f4f6; color:#6b7280; }
-.dropdown-item {
-  display:flex; align-items:center; gap:0.7rem; padding:0.6rem 0.9rem;
-  border-radius:8px; font-size:0.85rem; font-weight:500; color:#374151;
-  cursor:pointer; text-decoration:none; transition:background 0.15s; border:none; background:none; width:100%; font-family:inherit;
-}
-.dropdown-item:hover { background:#f5f5ff; color:#4f46e5; }
-.dropdown-item.danger:hover { background:#fef2f2; color:#ef4444; }
-.dropdown-item svg { flex-shrink:0; opacity:0.6; }
-.dropdown-sep { height:1px; background:#f0f0f5; margin:0.3rem 0; }
+.dd-header { padding:0.75rem 0.85rem 0.6rem; border-bottom:1px solid #f0f0f5; margin-bottom:0.3rem; }
+.dd-name { font-size:0.88rem; font-weight:700; color:#0f0f1a; }
+.dd-email { font-size:0.73rem; color:#9ca3af; margin-top:1px; overflow:hidden; text-overflow:ellipsis; }
+.dd-badge { display:inline-flex; align-items:center; gap:0.3rem; margin-top:0.4rem; background:#fef3c7; color:#92400e; font-size:0.7rem; font-weight:700; padding:0.18rem 0.55rem; border-radius:100px; }
+.dd-badge.free { background:#f3f4f6; color:#6b7280; }
+.dd-item { display:flex; align-items:center; gap:0.65rem; padding:0.55rem 0.85rem; border-radius:8px; font-size:0.84rem; font-weight:500; color:#374151; cursor:pointer; text-decoration:none; transition:background 0.15s; border:none; background:none; width:100%; font-family:inherit; }
+.dd-item:hover { background:#f5f5ff; color:#4f46e5; }
+.dd-item.danger:hover { background:#fef2f2; color:#ef4444; }
+.dd-sep { height:1px; background:#f0f0f5; margin:0.3rem 0; }
 
 /* ── PREMIUM TOAST ── */
-.premium-toast {
-  position:fixed; top:80px; right:1.5rem; z-index:300;
-  background:linear-gradient(135deg,#f59e0b,#d97706); color:#fff;
-  padding:0.8rem 1.2rem; border-radius:12px; font-size:0.85rem; font-weight:600;
-  box-shadow:0 8px 25px rgba(245,158,11,0.35); display:flex; align-items:center; gap:0.6rem;
-  transform:translateX(120%); transition:transform 0.4s cubic-bezier(0.34,1.56,0.64,1);
-  max-width:280px;
-}
-.premium-toast.show { transform:translateX(0); }
+.prem-toast { position:fixed; top:76px; right:1.5rem; z-index:300; background:linear-gradient(135deg,#f59e0b,#d97706); color:#fff; padding:0.75rem 1.1rem; border-radius:12px; font-size:0.84rem; font-weight:600; box-shadow:0 8px 25px rgba(245,158,11,0.35); display:flex; align-items:center; gap:0.5rem; transform:translateX(130%); transition:transform 0.4s cubic-bezier(0.34,1.56,0.64,1); max-width:280px; }
+.prem-toast.show { transform:translateX(0); }
 
-/* ── HERO AUTH SECTION ── */
-.hero-auth-strip {
-  display:flex; align-items:center; justify-content:center; gap:1rem;
-  margin-bottom:1rem; flex-wrap:wrap;
-}
-.hero-user-badge {
-  display:inline-flex; align-items:center; gap:0.5rem;
-  background:#fff; border:1.5px solid #e5e7eb; border-radius:100px;
-  padding:0.35rem 0.9rem 0.35rem 0.4rem; font-size:0.82rem; font-weight:600; color:#374151;
-  box-shadow:0 2px 8px rgba(0,0,0,0.06);
-}
-.hero-premium-badge {
-  display:inline-flex; align-items:center; gap:0.4rem;
-  background:linear-gradient(135deg,#fef3c7,#fde68a); color:#92400e;
-  border:1.5px solid #fcd34d; border-radius:100px;
-  padding:0.35rem 0.9rem; font-size:0.82rem; font-weight:700;
-  box-shadow:0 2px 8px rgba(245,158,11,0.2);
-}
+/* ── HERO STRIP ── */
+.hero-strip { display:flex; align-items:center; justify-content:center; gap:0.8rem; margin-bottom:1rem; flex-wrap:wrap; }
+.hero-user-badge { display:inline-flex; align-items:center; gap:0.5rem; background:#fff; border:1.5px solid #e5e7eb; border-radius:100px; padding:0.3rem 0.85rem 0.3rem 0.35rem; font-size:0.8rem; font-weight:600; color:#374151; box-shadow:0 2px 8px rgba(0,0,0,0.05); }
+.hero-prem-badge { display:inline-flex; align-items:center; gap:0.4rem; background:#fef3c7; color:#92400e; border:1.5px solid #fcd34d; border-radius:100px; padding:0.3rem 0.85rem; font-size:0.8rem; font-weight:700; }
+
+/* ── STATS SECTION ── */
+.stats-section { background:#0f0f1a; padding:3rem 2rem; }
+.stats-inner { max-width:900px; margin:0 auto; display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:2rem; text-align:center; }
+.stat-item {}
+.stat-num { font-family:'Syne',sans-serif; font-size:2.4rem; font-weight:800; color:#fff; letter-spacing:-0.03em; }
+.stat-num span { color:#4f46e5; }
+.stat-label { font-size:0.85rem; color:#6b7280; margin-top:0.3rem; }
+
+/* ── TESTIMONIALS ── */
+.testimonials { padding:4rem 2rem; background:#fff; border-top:1px solid #f0f0f5; }
+.testimonials-inner { max-width:1060px; margin:0 auto; }
+.testi-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:1.2rem; margin-top:3rem; }
+.testi-card { background:#f8f7ff; border:1px solid #ede9fe; border-radius:16px; padding:1.5rem; }
+.testi-stars { color:#f59e0b; font-size:0.85rem; margin-bottom:0.8rem; letter-spacing:2px; }
+.testi-text { font-size:0.9rem; color:#374151; line-height:1.6; margin-bottom:1rem; font-style:italic; }
+.testi-author { display:flex; align-items:center; gap:0.6rem; }
+.testi-av { width:34px; height:34px; border-radius:50%; background:linear-gradient(135deg,#4f46e5,#7c3aed); display:flex; align-items:center; justify-content:center; color:#fff; font-size:0.82rem; font-weight:700; }
+.testi-name { font-size:0.84rem; font-weight:700; color:#0f0f1a; }
+.testi-sub { font-size:0.75rem; color:#9ca3af; }
+
+/* ── FAQ ── */
+.faq-section { padding:4rem 2rem; background:#fafafa; border-top:1px solid #f0f0f5; }
+.faq-inner { max-width:720px; margin:0 auto; }
+.faq-list { margin-top:2.5rem; display:flex; flex-direction:column; gap:0.8rem; }
+.faq-item { background:#fff; border:1.5px solid #e5e7eb; border-radius:12px; overflow:hidden; transition:border-color 0.2s; }
+.faq-item.open { border-color:#4f46e5; }
+.faq-q { display:flex; align-items:center; justify-content:space-between; padding:1.1rem 1.3rem; cursor:pointer; font-weight:600; font-size:0.9rem; color:#1a1a2e; gap:1rem; }
+.faq-icon { width:22px; height:22px; border-radius:50%; background:#ede9fe; display:flex; align-items:center; justify-content:center; color:#4f46e5; font-size:0.9rem; flex-shrink:0; transition:transform 0.25s; font-weight:700; }
+.faq-item.open .faq-icon { transform:rotate(45deg); background:#4f46e5; color:#fff; }
+.faq-a { display:none; padding:0 1.3rem 1.1rem; font-size:0.875rem; color:#6b7280; line-height:1.7; }
+.faq-item.open .faq-a { display:block; }
+
+/* ── PREMIUM CTA ── */
+.premium-cta { padding:4rem 2rem; background:linear-gradient(135deg,#1a1a2e 0%,#0f0f1a 100%); text-align:center; }
+.premium-cta h2 { font-family:'Syne',sans-serif; font-size:clamp(1.5rem,3vw,2.2rem); font-weight:800; color:#fff; margin-bottom:0.8rem; letter-spacing:-0.02em; }
+.premium-cta p { color:#9ca3af; font-size:0.95rem; max-width:460px; margin:0 auto 2rem; }
+.cta-btns { display:flex; gap:1rem; justify-content:center; flex-wrap:wrap; }
+.cta-btn-prem { display:inline-flex; align-items:center; gap:0.5rem; background:linear-gradient(135deg,#f59e0b,#d97706); color:#000; padding:0.85rem 2rem; border-radius:12px; font-weight:800; font-size:0.95rem; text-decoration:none; transition:all 0.2s; }
+.cta-btn-prem:hover { transform:translateY(-2px); box-shadow:0 8px 25px rgba(245,158,11,0.4); }
+.cta-btn-support { display:inline-flex; align-items:center; gap:0.5rem; background:rgba(255,255,255,0.1); color:#fff; padding:0.85rem 2rem; border-radius:12px; font-weight:700; font-size:0.95rem; text-decoration:none; border:1.5px solid rgba(255,255,255,0.15); transition:all 0.2s; }
+.cta-btn-support:hover { background:rgba(255,255,255,0.15); }
 
 /* ── AUTH MODAL ── */
-.modal-overlay {
-  display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55);
-  z-index:400; align-items:center; justify-content:center; backdrop-filter:blur(6px);
-}
+.modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:400; align-items:center; justify-content:center; backdrop-filter:blur(6px); padding:1rem; }
 .modal-overlay.show { display:flex; }
-.auth-modal {
-  background:#fff; border-radius:24px; padding:2rem; max-width:420px; width:90%;
-  box-shadow:0 30px 80px rgba(0,0,0,0.15); position:relative;
-  animation:modalIn 0.25s cubic-bezier(0.34,1.56,0.64,1);
-}
+.auth-modal { background:#fff; border-radius:22px; padding:2rem; max-width:410px; width:100%; box-shadow:0 30px 80px rgba(0,0,0,0.15); position:relative; animation:modalIn 0.25s cubic-bezier(0.34,1.56,0.64,1); }
 @keyframes modalIn { from{opacity:0;transform:scale(0.9)} to{opacity:1;transform:scale(1)} }
-.modal-close { position:absolute; top:1rem; right:1rem; background:#f5f5f5; border:none; border-radius:50%; width:28px; height:28px; cursor:pointer; font-size:1rem; display:flex; align-items:center; justify-content:center; color:#6b7280; transition:all 0.15s; }
+.modal-close { position:absolute; top:1rem; right:1rem; background:#f5f5f5; border:none; border-radius:50%; width:28px; height:28px; cursor:pointer; font-size:1.1rem; display:flex; align-items:center; justify-content:center; color:#6b7280; }
 .modal-close:hover { background:#ef4444; color:#fff; }
-.auth-modal h2 { font-size:1.4rem; font-weight:800; margin-bottom:0.3rem; font-family:'Syne',sans-serif; }
-.auth-modal p { font-size:0.875rem; color:#6b7280; margin-bottom:1.5rem; }
+.auth-modal h2 { font-family:'Syne',sans-serif; font-size:1.4rem; font-weight:800; margin-bottom:0.3rem; }
+.auth-modal > p { font-size:0.875rem; color:#6b7280; margin-bottom:1.5rem; }
 .auth-tabs { display:flex; background:#f5f5f5; border-radius:10px; padding:3px; margin-bottom:1.5rem; }
-.auth-tab {
-  flex:1; padding:0.55rem; font-size:0.85rem; font-weight:700; border:none;
-  background:none; cursor:pointer; border-radius:8px; transition:all 0.2s; font-family:inherit; color:#6b7280;
-}
+.auth-tab { flex:1; padding:0.55rem; font-size:0.84rem; font-weight:700; border:none; background:none; cursor:pointer; border-radius:8px; transition:all 0.2s; font-family:inherit; color:#6b7280; }
 .auth-tab.login.active { background:#4f46e5; color:#fff; box-shadow:0 2px 8px rgba(79,70,229,0.3); }
 .auth-tab.signup.active { background:linear-gradient(135deg,#059669,#10b981); color:#fff; box-shadow:0 2px 8px rgba(16,185,129,0.3); }
-.form-group { margin-bottom:1rem; }
-.form-label { display:block; font-size:0.78rem; font-weight:700; color:#374151; margin-bottom:0.4rem; letter-spacing:0.03em; text-transform:uppercase; }
-.form-input { width:100%; border:1.5px solid #e5e7eb; border-radius:10px; padding:0.75rem 1rem; font-size:0.9rem; font-family:inherit; color:#1a1a2e; outline:none; transition:all 0.2s; }
-.form-input:focus { border-color:#4f46e5; box-shadow:0 0 0 3px rgba(79,70,229,0.1); }
-.form-btn-login { width:100%; background:#4f46e5; color:#fff; border:none; border-radius:10px; padding:0.85rem; font-size:0.95rem; font-weight:700; cursor:pointer; font-family:inherit; margin-top:0.5rem; transition:all 0.2s; }
-.form-btn-login:hover { background:#4338ca; }
-.form-btn-signup { width:100%; background:linear-gradient(135deg,#059669,#10b981); color:#fff; border:none; border-radius:10px; padding:0.85rem; font-size:0.95rem; font-weight:700; cursor:pointer; font-family:inherit; margin-top:0.5rem; transition:all 0.2s; }
-.form-btn-signup:hover { opacity:0.9; }
-.form-btn:disabled { opacity:0.6; cursor:not-allowed; }
-.form-msg { font-size:0.82rem; min-height:1rem; margin-top:0.5rem; font-weight:600; text-align:center; }
-.auth-divider { display:flex; align-items:center; gap:0.8rem; margin:1rem 0; }
-.auth-divider::before, .auth-divider::after { content:''; flex:1; height:1px; background:#e5e7eb; }
-.auth-divider span { font-size:0.75rem; color:#9ca3af; font-weight:600; }
-.google-btn { width:100%; display:flex; align-items:center; justify-content:center; gap:0.7rem; background:#fff; border:1.5px solid #e5e7eb; border-radius:10px; padding:0.75rem; font-size:0.9rem; font-weight:600; cursor:pointer; font-family:inherit; transition:all 0.2s; }
-.google-btn:hover { border-color:#4f46e5; background:#f8f7ff; }
+.fg { margin-bottom:1rem; }
+.fl { display:block; font-size:0.75rem; font-weight:700; color:#374151; margin-bottom:0.35rem; letter-spacing:0.04em; text-transform:uppercase; }
+.fi { width:100%; border:1.5px solid #e5e7eb; border-radius:10px; padding:0.7rem 1rem; font-size:0.9rem; font-family:inherit; color:#1a1a2e; outline:none; transition:all 0.2s; }
+.fi:focus { border-color:#4f46e5; box-shadow:0 0 0 3px rgba(79,70,229,0.1); }
+.fb-login { width:100%; background:#4f46e5; color:#fff; border:none; border-radius:10px; padding:0.82rem; font-size:0.9rem; font-weight:700; cursor:pointer; font-family:inherit; margin-top:0.4rem; transition:background 0.2s; }
+.fb-login:hover { background:#4338ca; }
+.fb-signup { width:100%; background:linear-gradient(135deg,#059669,#10b981); color:#fff; border:none; border-radius:10px; padding:0.82rem; font-size:0.9rem; font-weight:700; cursor:pointer; font-family:inherit; margin-top:0.4rem; transition:opacity 0.2s; }
+.fb-signup:hover { opacity:0.9; }
+.fmsg { font-size:0.8rem; min-height:1rem; margin-top:0.4rem; font-weight:600; text-align:center; }
+.adiv { display:flex; align-items:center; gap:0.8rem; margin:0.9rem 0; }
+.adiv::before,.adiv::after { content:''; flex:1; height:1px; background:#e5e7eb; }
+.adiv span { font-size:0.73rem; color:#9ca3af; font-weight:600; }
+.gbtn { width:100%; display:flex; align-items:center; justify-content:center; gap:0.65rem; background:#fff; border:1.5px solid #e5e7eb; border-radius:10px; padding:0.72rem; font-size:0.88rem; font-weight:600; cursor:pointer; font-family:inherit; transition:all 0.2s; }
+.gbtn:hover { border-color:#4f46e5; background:#f8f7ff; }
 
+/* ── RESPONSIVE ── */
 @media(max-width:768px) {
-  .user-name { display:none; }
-  .btn-login span { display:none; }
+  .u-name { display:none; }
+  .stats-inner { grid-template-columns:repeat(2,1fr); gap:1.5rem; }
+  .stat-num { font-size:1.8rem; }
+  .testi-grid { grid-template-columns:1fr; }
+  .cta-btns { flex-direction:column; align-items:center; }
+  .prem-toast { right:1rem; left:1rem; max-width:none; }
+}
+@media(max-width:480px) {
+  .nav-auth .btn-login { padding:0.4rem 0.6rem; font-size:0.78rem; }
+  .nav-auth .btn-signup { padding:0.4rem 0.6rem; font-size:0.78rem; }
+  .stats-inner { grid-template-columns:1fr 1fr; }
 }
 </style>
 </head>
@@ -158,47 +148,44 @@
   <div class="nav-links" id="navLinks">
     <a href="#features">Fonctionnalités</a>
     <a href="#how">Comment ça marche</a>
+    <a href="#faq">FAQ</a>
     <a href="premium.html" style="color:#f59e0b;font-weight:700">⭐ Premium</a>
   </div>
 
-  <!-- AUTH ZONE -->
+  <!-- AUTH -->
   <div class="nav-auth" id="navAuthZone">
-    <!-- Non connecté -->
-    <div id="navGuest">
-      <a href="#" class="btn-login" onclick="openAuth('login'); return false;"><span>Connexion</span></a>
-      <a href="#" class="btn-signup" onclick="openAuth('signup'); return false;">S'inscrire</a>
+    <div id="navGuest" style="display:flex;gap:0.5rem;align-items:center;">
+      <a href="#" class="btn-login" onclick="openAuth('login');return false;">Connexion</a>
+      <a href="#" class="btn-signup" onclick="openAuth('signup');return false;">S'inscrire</a>
     </div>
-    <!-- Connecté -->
-    <div id="navUser" style="display:none" class="user-menu-wrap">
-      <div class="user-trigger" onclick="toggleDropdown()">
-        <div class="user-avatar" id="navAvatar">?</div>
-        <span class="user-name" id="navName"></span>
-        <div class="premium-dot" id="navPremiumDot" style="display:none"></div>
-        <div class="hamburger-icon">
-          <span></span><span></span><span></span>
-        </div>
+    <div id="navUser" style="display:none" class="user-wrap">
+      <div class="user-trigger" onclick="toggleDD()">
+        <div class="u-avatar" id="navAv">?</div>
+        <span class="u-name" id="navName"></span>
+        <div class="prem-dot" id="navPremDot" style="display:none"></div>
+        <div class="burger-lines"><span></span><span></span><span></span></div>
       </div>
-      <div class="user-dropdown" id="userDropdown">
-        <div class="dropdown-header">
-          <div class="dropdown-name" id="dropName"></div>
-          <div class="dropdown-email" id="dropEmail"></div>
-          <div class="dropdown-plan free" id="dropPlan">Gratuit</div>
+      <div class="dropdown" id="userDD">
+        <div class="dd-header">
+          <div class="dd-name" id="ddName"></div>
+          <div class="dd-email" id="ddEmail"></div>
+          <div class="dd-badge free" id="ddBadge">Gratuit</div>
         </div>
-        <a href="premium.html" class="dropdown-item">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+        <a href="premium.html" class="dd-item">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
           Mon plan Premium
         </a>
-        <a href="premium.html#chat" class="dropdown-item">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        <a href="support.html" class="dd-item">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
           Contacter le support
         </a>
-        <a href="https://t.me/Loicdev" target="_blank" class="dropdown-item">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2L15 22 11 13 2 9l20-7z"/></svg>
-          Telegram @Loicdev
+        <a href="premium.html#code" class="dd-item">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          Activer un code
         </a>
-        <div class="dropdown-sep"></div>
-        <button class="dropdown-item danger" onclick="logoutUser()">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        <div class="dd-sep"></div>
+        <button class="dd-item danger" onclick="doLogout()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
           Déconnexion
         </button>
       </div>
@@ -206,36 +193,29 @@
   </div>
 </nav>
 
-<!-- PREMIUM TOAST -->
-<div class="premium-toast" id="premiumToast">
-  ⭐ Bienvenue, membre Premium !
-</div>
+<!-- TOAST PREMIUM -->
+<div class="prem-toast" id="premToast">⭐ Bienvenue, membre Premium !</div>
 
 <!-- HERO -->
 <section class="hero">
-  <!-- HERO AUTH STRIP -->
-  <div class="hero-auth-strip" id="heroAuthStrip" style="display:none">
-    <div class="hero-user-badge" id="heroUserBadge">
-      <div class="user-avatar" id="heroAvatar" style="width:24px;height:24px;font-size:0.7rem">?</div>
+  <div class="hero-strip" id="heroStrip" style="display:none">
+    <div class="hero-user-badge">
+      <div class="u-avatar" id="heroAv" style="width:24px;height:24px;font-size:0.7rem">?</div>
       <span id="heroName"></span>
     </div>
-    <div class="hero-premium-badge" id="heroPremiumBadge" style="display:none">
-      ⭐ Premium actif
-    </div>
+    <div class="hero-prem-badge" id="heroPremBadge" style="display:none">⭐ Premium actif</div>
   </div>
 
   <div class="hero-badge">
     <span class="hero-badge-dot"></span>
     Gratuit · Rapide · Sans limite cachée
   </div>
-
   <div id="premiumBadge" style="display:none; font-size:0.82rem; font-weight:700; margin-bottom:0.5rem;"></div>
   <div id="dlCounter" style="display:none; font-size:0.78rem; margin-bottom:0.5rem;"></div>
 
   <h1>Télécharge depuis <span style="color:#ff0000">YouTube</span><br>&amp; <span style="color:#69c9d0">TikTok</span></h1>
   <p class="hero-sub">Colle ton lien, choisis le format — MP4 ou MP3 — et télécharge instantanément.</p>
 
-  <!-- MAIN CARD -->
   <div class="main-card">
     <div class="tabs">
       <button class="tab active" onclick="switchTab(this,'yt')">
@@ -247,7 +227,6 @@
         TikTok
       </button>
     </div>
-
     <div class="input-zone">
       <div class="url-row">
         <input class="url-input" id="urlInput" type="url" placeholder="Colle ton lien YouTube ici…">
@@ -264,10 +243,7 @@
         <div class="fmt-chip" data-fmt="mp4" data-q="360" onclick="selectFmt(this)">MP4 360p</div>
         <div class="fmt-chip" data-fmt="mp3" data-q="best" onclick="selectFmt(this)">MP3 Audio</div>
       </div>
-      <div class="loader-row" id="loader">
-        <div class="spin"></div>
-        <span id="loaderText">Analyse du lien en cours…</span>
-      </div>
+      <div class="loader-row" id="loader"><div class="spin"></div><span id="loaderText">Analyse en cours…</span></div>
       <div class="result-row" id="resultRow">
         <div class="result-thumb"><img id="rThumb" src="" alt=""></div>
         <div class="result-info">
@@ -285,6 +261,28 @@
     <div class="p-badge"><span class="p-dot" style="background:#4f46e5"></span> MP3 Audio</div>
   </div>
 </section>
+
+<!-- STATS -->
+<div class="stats-section">
+  <div class="stats-inner">
+    <div class="stat-item">
+      <div class="stat-num">50<span>K+</span></div>
+      <div class="stat-label">Téléchargements réalisés</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-num">12<span>K+</span></div>
+      <div class="stat-label">Utilisateurs actifs</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-num">99<span>%</span></div>
+      <div class="stat-label">Taux de satisfaction</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-num">2<span>s</span></div>
+      <div class="stat-label">Temps moyen de téléchargement</div>
+    </div>
+  </div>
+</div>
 
 <!-- FEATURES -->
 <section class="features" id="features">
@@ -305,15 +303,36 @@
         <div class="feat-icon" style="background:#f0fdf4">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
         </div>
-        <h3>Téléchargement instantané</h3>
-        <p>Pas d'attente, pas de file d'attente. Le fichier est prêt en quelques secondes.</p>
+        <h3>Instantané & sans attente</h3>
+        <p>Pas de file d'attente. Le fichier est prêt en quelques secondes, directement dans tes téléchargements.</p>
       </div>
       <div class="feat-card">
         <div class="feat-icon" style="background:#ede9fe">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
         </div>
-        <h3>100% sécurisé</h3>
-        <p>Aucun fichier stocké sur nos serveurs. Téléchargement direct et privé.</p>
+        <h3>100% privé & sécurisé</h3>
+        <p>Aucun fichier stocké sur nos serveurs. Téléchargement direct depuis la source.</p>
+      </div>
+      <div class="feat-card">
+        <div class="feat-icon" style="background:#fef3c7">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+        </div>
+        <h3>Premium sans limite</h3>
+        <p>Passe Premium pour des téléchargements illimités, prioritaires et sans restriction de qualité.</p>
+      </div>
+      <div class="feat-card">
+        <div class="feat-icon" style="background:#f0f9ff">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0284c7" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.6 1.09h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.09a16 16 0 0 0 6 6l.92-.92a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 21.73 16.92z"/></svg>
+        </div>
+        <h3>Support réactif</h3>
+        <p>Une question ? Notre équipe répond en quelques minutes via le chat ou Telegram.</p>
+      </div>
+      <div class="feat-card">
+        <div class="feat-icon" style="background:#fdf4ff">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#a21caf" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+        </div>
+        <h3>Bot Telegram inclus</h3>
+        <p>Envoie tes liens directement sur Telegram — depuis n'importe où, sans ouvrir le site.</p>
       </div>
     </div>
   </div>
@@ -340,13 +359,113 @@
       <div class="step">
         <div class="step-num">3</div>
         <h4>Télécharge</h4>
-        <p>Clique sur Télécharger. Le fichier est prêt en quelques secondes.</p>
+        <p>Clique sur Télécharger. Le fichier arrive en quelques secondes.</p>
       </div>
     </div>
   </div>
 </section>
 
-<!-- TELEGRAM BANNER -->
+<!-- TESTIMONIALS -->
+<section class="testimonials">
+  <div class="testimonials-inner">
+    <div class="section-head">
+      <h2>Ce qu'ils en disent</h2>
+      <p>Des milliers d'utilisateurs font confiance à AlphaConvert.</p>
+    </div>
+    <div class="testi-grid">
+      <div class="testi-card">
+        <div class="testi-stars">★★★★★</div>
+        <p class="testi-text">"Le meilleur téléchargeur que j'ai utilisé. Rapide, propre, aucune pub. Je télécharge mes cours YouTube en MP3 tous les jours."</p>
+        <div class="testi-author">
+          <div class="testi-av">K</div>
+          <div><div class="testi-name">Kofi A.</div><div class="testi-sub">Étudiant · Accra</div></div>
+        </div>
+      </div>
+      <div class="testi-card">
+        <div class="testi-stars">★★★★★</div>
+        <p class="testi-text">"J'utilise le plan Premium 3 mois — 12$ pour des téléchargements illimités, c'est vraiment imbattable. Le support répond en 5 minutes sur Telegram."</p>
+        <div class="testi-author">
+          <div class="testi-av">F</div>
+          <div><div class="testi-name">Fatou D.</div><div class="testi-sub">Content creator · Dakar</div></div>
+        </div>
+      </div>
+      <div class="testi-card">
+        <div class="testi-stars">★★★★★</div>
+        <p class="testi-text">"Simple et efficace. Je télécharge des vidéos TikTok pour mes montages. La qualité HD est parfaite, rien à redire."</p>
+        <div class="testi-author">
+          <div class="testi-av">M</div>
+          <div><div class="testi-name">Moussa T.</div><div class="testi-sub">Monteur vidéo · Lomé</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FAQ -->
+<section class="faq-section" id="faq">
+  <div class="faq-inner">
+    <div class="section-head">
+      <h2>Questions fréquentes</h2>
+      <p>Tout ce que tu veux savoir avant de commencer.</p>
+    </div>
+    <div class="faq-list">
+      <div class="faq-item">
+        <div class="faq-q" onclick="toggleFaq(this)">
+          C'est vraiment gratuit ?
+          <div class="faq-icon">+</div>
+        </div>
+        <div class="faq-a">Oui ! La version gratuite te donne 3 téléchargements par jour, sans inscription. Pour un usage illimité, le plan Premium commence à 5$ par mois.</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q" onclick="toggleFaq(this)">
+          Quelles plateformes sont supportées ?
+          <div class="faq-icon">+</div>
+        </div>
+        <div class="faq-a">Nous supportons YouTube (toutes qualités jusqu'à 1080p) et TikTok. D'autres plateformes sont en cours d'ajout.</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q" onclick="toggleFaq(this)">
+          Comment fonctionne le Premium ?
+          <div class="faq-icon">+</div>
+        </div>
+        <div class="faq-a">Tu contactes notre équipe sur Telegram ou WhatsApp, tu effectues le paiement, et tu reçois un code d'activation unique. Tu l'entres sur la page Premium — ton accès est immédiatement activé.</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q" onclick="toggleFaq(this)">
+          Mes fichiers sont-ils stockés quelque part ?
+          <div class="faq-icon">+</div>
+        </div>
+        <div class="faq-a">Non. Les fichiers sont téléchargés directement depuis la source vers ton appareil. Rien n'est conservé sur nos serveurs après le téléchargement.</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q" onclick="toggleFaq(this)">
+          Comment contacter le support ?
+          <div class="faq-icon">+</div>
+        </div>
+        <div class="faq-a">Tu peux utiliser notre chat support directement sur le site, ou nous contacter sur Telegram. On répond en général en moins de 10 minutes.</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q" onclick="toggleFaq(this)">
+          Le téléchargement est-il illimité avec Premium ?
+          <div class="faq-icon">+</div>
+        </div>
+        <div class="faq-a">Oui ! Avec un abonnement Premium actif, tu peux télécharger autant de vidéos que tu veux, en toutes qualités, sans aucune restriction.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PREMIUM CTA -->
+<section class="premium-cta">
+  <h2>Prêt à passer au niveau supérieur ?</h2>
+  <p>Téléchargements illimités dès 5$ par mois. Annule quand tu veux.</p>
+  <div class="cta-btns">
+    <a href="premium.html" class="cta-btn-prem">⭐ Voir les plans Premium</a>
+    <a href="support.html" class="cta-btn-support">💬 Parler au support</a>
+  </div>
+</section>
+
+<!-- TG BANNER -->
 <div style="padding:0 2rem 4rem; max-width:1100px; margin:0 auto;">
   <div class="tg-banner">
     <div style="font-size:2.5rem">✈️</div>
@@ -361,35 +480,38 @@
 <!-- FOOTER -->
 <footer>
   <p style="margin-bottom:0.5rem"><strong style="color:#fff">AlphaConvert</strong> — Téléchargeur YouTube &amp; TikTok</p>
-  <p>© 2026 · <a href="#">Confidentialité</a> · <a href="#">Conditions</a></p>
+  <p style="margin-bottom:1rem">
+    <a href="support.html">Support</a> · <a href="premium.html">Premium</a> · <a href="#">Confidentialité</a> · <a href="#">Conditions</a>
+  </p>
+  <p>© 2026 AlphaConvert · Fait avec ❤️</p>
 </footer>
 
 <!-- MODAL LIMITE -->
-<div id="limitModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.75); z-index:1000; align-items:center; justify-content:center;">
-  <div style="background:#1a1a2e; border:1.5px solid #2a2a3e; border-radius:16px; padding:2rem; max-width:400px; width:90%; text-align:center;">
-    <div style="font-size:2.5rem; margin-bottom:1rem">🚫</div>
-    <h3 style="font-size:1.1rem; font-weight:800; margin-bottom:0.5rem; color:#fff">Limite atteinte</h3>
-    <p style="color:#6b7280; font-size:0.85rem; margin-bottom:1.5rem">Tu as utilisé tes 3 téléchargements gratuits d'aujourd'hui.</p>
-    <div style="display:flex; gap:0.8rem; justify-content:center;">
-      <button onclick="closeLimitModal()" style="padding:0.7rem 1.2rem; background:#252538; color:#9ca3af; border:none; border-radius:10px; font-size:0.88rem; font-weight:700; cursor:pointer; font-family:inherit;">Fermer</button>
-      <a href="premium.html" style="padding:0.7rem 1.4rem; background:#f59e0b; color:#000; border:none; border-radius:10px; font-size:0.88rem; font-weight:700; cursor:pointer; font-family:inherit; text-decoration:none;">⭐ Voir Premium</a>
+<div id="limitModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:1000;align-items:center;justify-content:center;">
+  <div style="background:#1a1a2e;border:1.5px solid #2a2a3e;border-radius:16px;padding:2rem;max-width:400px;width:90%;text-align:center;">
+    <div style="font-size:2.5rem;margin-bottom:1rem">🚫</div>
+    <h3 style="font-size:1.1rem;font-weight:800;margin-bottom:0.5rem;color:#fff">Limite atteinte</h3>
+    <p style="color:#6b7280;font-size:0.85rem;margin-bottom:1.5rem">Tu as utilisé tes 3 téléchargements gratuits d'aujourd'hui. Reviens demain ou passe Premium.</p>
+    <div style="display:flex;gap:0.8rem;justify-content:center;">
+      <button onclick="closeLimitModal()" style="padding:0.7rem 1.2rem;background:#252538;color:#9ca3af;border:none;border-radius:10px;font-size:0.88rem;font-weight:700;cursor:pointer;font-family:inherit;">Fermer</button>
+      <a href="premium.html" style="padding:0.7rem 1.4rem;background:#f59e0b;color:#000;border-radius:10px;font-size:0.88rem;font-weight:700;text-decoration:none;">⭐ Voir Premium</a>
     </div>
   </div>
 </div>
 
-<!-- MODAL CODE PREMIUM -->
-<div id="codeModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.75); z-index:1000; align-items:center; justify-content:center;">
-  <div style="background:#1a1a2e; border:1.5px solid #f59e0b; border-radius:16px; padding:2rem; max-width:400px; width:90%; text-align:center;">
-    <div style="font-size:2.5rem; margin-bottom:0.8rem">⭐</div>
-    <h3 style="font-size:1.1rem; font-weight:800; margin-bottom:0.4rem; color:#fff">Activer Premium</h3>
-    <p style="color:#6b7280; font-size:0.85rem; margin-bottom:1.2rem">Entre ton code d'accès reçu après paiement.</p>
+<!-- MODAL CODE -->
+<div id="codeModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:1000;align-items:center;justify-content:center;">
+  <div style="background:#1a1a2e;border:1.5px solid #f59e0b;border-radius:16px;padding:2rem;max-width:400px;width:90%;text-align:center;">
+    <div style="font-size:2.5rem;margin-bottom:0.8rem">⭐</div>
+    <h3 style="font-size:1.1rem;font-weight:800;margin-bottom:0.4rem;color:#fff">Activer Premium</h3>
+    <p style="color:#6b7280;font-size:0.85rem;margin-bottom:1.2rem">Entre ton code d'accès reçu après paiement.</p>
     <input id="codeInput" type="text" placeholder="Ex: ALPHA-X7K2-9QMP"
-      style="width:100%; background:#0f0f1a; border:1.5px solid #2a2a3e; border-radius:10px; padding:0.8rem 1rem; font-size:0.95rem; font-family:inherit; color:#fff; outline:none; text-align:center; letter-spacing:2px; margin-bottom:0.8rem; text-transform:uppercase;"
+      style="width:100%;background:#0f0f1a;border:1.5px solid #2a2a3e;border-radius:10px;padding:0.8rem 1rem;font-size:0.95rem;font-family:inherit;color:#fff;outline:none;text-align:center;letter-spacing:2px;margin-bottom:0.8rem;text-transform:uppercase;"
       onkeydown="if(event.key==='Enter') activateCode()">
-    <div id="codeMsg" style="font-size:0.82rem; min-height:1.2rem; margin-bottom:1rem;"></div>
-    <div style="display:flex; gap:0.8rem; justify-content:center;">
-      <button onclick="closeCodeModal()" style="padding:0.7rem 1.2rem; background:#252538; color:#9ca3af; border:none; border-radius:10px; font-size:0.88rem; font-weight:700; cursor:pointer; font-family:inherit;">Annuler</button>
-      <button id="activateBtn" onclick="activateCode()" style="padding:0.7rem 1.4rem; background:#f59e0b; color:#000; border:none; border-radius:10px; font-size:0.88rem; font-weight:700; cursor:pointer; font-family:inherit;">Activer</button>
+    <div id="codeMsg" style="font-size:0.82rem;min-height:1.2rem;margin-bottom:1rem;"></div>
+    <div style="display:flex;gap:0.8rem;justify-content:center;">
+      <button onclick="closeCodeModal()" style="padding:0.7rem 1.2rem;background:#252538;color:#9ca3af;border:none;border-radius:10px;font-size:0.88rem;font-weight:700;cursor:pointer;font-family:inherit;">Annuler</button>
+      <button id="activateBtn" onclick="activateCode()" style="padding:0.7rem 1.4rem;background:#f59e0b;color:#000;border:none;border-radius:10px;font-size:0.88rem;font-weight:700;cursor:pointer;font-family:inherit;">Activer</button>
     </div>
   </div>
 </div>
@@ -401,215 +523,65 @@
     <h2>Bienvenue 👋</h2>
     <p>Connecte-toi pour gérer ton abonnement Premium.</p>
     <div class="auth-tabs">
-      <button class="auth-tab login active" id="tabLogin" onclick="switchTab2('login')">Connexion</button>
-      <button class="auth-tab signup" id="tabSignup" onclick="switchTab2('signup')">Inscription</button>
+      <button class="auth-tab login active" id="tabL" onclick="switchAuthTab('login')">Connexion</button>
+      <button class="auth-tab signup" id="tabS" onclick="switchAuthTab('signup')">Inscription</button>
     </div>
-    <!-- LOGIN -->
-    <div id="loginForm">
-      <div class="form-group">
-        <label class="form-label">Email</label>
-        <input class="form-input" id="loginEmail" type="email" placeholder="toi@email.com">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Mot de passe</label>
-        <input class="form-input" id="loginPass" type="password" placeholder="••••••••">
-      </div>
-      <button class="form-btn-login" id="loginBtn" onclick="loginUser()">Se connecter</button>
-      <div class="form-msg" id="loginMsg"></div>
-      <div class="auth-divider"><span>ou</span></div>
-      <button class="google-btn" onclick="loginGoogle()">
-        <svg width="18" height="18" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
-        Continuer avec Google
-      </button>
+    <div id="loginF">
+      <div class="fg"><label class="fl">Email</label><input class="fi" id="lEmail" type="email" placeholder="toi@email.com"></div>
+      <div class="fg"><label class="fl">Mot de passe</label><input class="fi" id="lPass" type="password" placeholder="••••••••"></div>
+      <button class="fb-login" id="lBtn" onclick="doLogin()">Se connecter</button>
+      <div class="fmsg" id="lMsg"></div>
+      <div class="adiv"><span>ou</span></div>
+      <button class="gbtn" onclick="doGoogle()"><svg width="18" height="18" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>Continuer avec Google</button>
     </div>
-    <!-- SIGNUP -->
-    <div id="signupForm" style="display:none">
-      <div class="form-group">
-        <label class="form-label">Prénom</label>
-        <input class="form-input" id="signupName" type="text" placeholder="Ton prénom">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Email</label>
-        <input class="form-input" id="signupEmail" type="email" placeholder="toi@email.com">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Mot de passe</label>
-        <input class="form-input" id="signupPass" type="password" placeholder="Au moins 6 caractères">
-      </div>
-      <button class="form-btn-signup" id="signupBtn" onclick="signupUser()">Créer mon compte</button>
-      <div class="form-msg" id="signupMsg"></div>
-      <div class="auth-divider"><span>ou</span></div>
-      <button class="google-btn" onclick="loginGoogle()">
-        <svg width="18" height="18" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
-        Continuer avec Google
-      </button>
+    <div id="signupF" style="display:none">
+      <div class="fg"><label class="fl">Prénom</label><input class="fi" id="sName" type="text" placeholder="Ton prénom"></div>
+      <div class="fg"><label class="fl">Email</label><input class="fi" id="sEmail" type="email" placeholder="toi@email.com"></div>
+      <div class="fg"><label class="fl">Mot de passe</label><input class="fi" id="sPass" type="password" placeholder="Au moins 6 caractères"></div>
+      <button class="fb-signup" id="sBtn" onclick="doSignup()">Créer mon compte</button>
+      <div class="fmsg" id="sMsg"></div>
+      <div class="adiv"><span>ou</span></div>
+      <button class="gbtn" onclick="doGoogle()"><svg width="18" height="18" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>Continuer avec Google</button>
     </div>
   </div>
 </div>
 
 <script>
-function toggleMenu() {
-  document.getElementById('navLinks').classList.toggle('open');
-  document.getElementById('hamburger').classList.toggle('open');
-}
-document.addEventListener('DOMContentLoaded', function() {
-  document.querySelectorAll('#navLinks a').forEach(function(a) {
-    a.addEventListener('click', function() {
-      document.getElementById('navLinks').classList.remove('open');
-      document.getElementById('hamburger').classList.remove('open');
-    });
-  });
-});
-function toggleDropdown() {
-  document.getElementById('userDropdown').classList.toggle('open');
-}
-document.addEventListener('click', function(e) {
-  const wrap = document.querySelector('.user-menu-wrap');
-  if (wrap && !wrap.contains(e.target)) {
-    document.getElementById('userDropdown')?.classList.remove('open');
-  }
-});
-function openAuth(tab) {
-  document.getElementById('authModal').classList.add('show');
-  switchTab2(tab || 'login');
-}
-function closeAuth() {
-  document.getElementById('authModal').classList.remove('show');
-}
-function switchTab2(tab) {
-  document.getElementById('loginForm').style.display = tab === 'login' ? 'block' : 'none';
-  document.getElementById('signupForm').style.display = tab === 'signup' ? 'block' : 'none';
-  document.getElementById('tabLogin').classList.toggle('active', tab === 'login');
-  document.getElementById('tabSignup').classList.toggle('active', tab === 'signup');
-}
-window.openAuth = openAuth;
-window.closeAuth = closeAuth;
+function toggleMenu(){document.getElementById('navLinks').classList.toggle('open');document.getElementById('hamburger').classList.toggle('open');}
+document.addEventListener('DOMContentLoaded',function(){document.querySelectorAll('#navLinks a').forEach(function(a){a.addEventListener('click',function(){document.getElementById('navLinks').classList.remove('open');document.getElementById('hamburger').classList.remove('open');});});});
+function toggleDD(){document.getElementById('userDD').classList.toggle('open');}
+document.addEventListener('click',function(e){const w=document.querySelector('.user-wrap');if(w&&!w.contains(e.target))document.getElementById('userDD')?.classList.remove('open');});
+function openAuth(t){document.getElementById('authModal').classList.add('show');switchAuthTab(t||'login');}
+function closeAuth(){document.getElementById('authModal').classList.remove('show');}
+function switchAuthTab(t){document.getElementById('loginF').style.display=t==='login'?'block':'none';document.getElementById('signupF').style.display=t==='signup'?'block':'none';document.getElementById('tabL').classList.toggle('active',t==='login');document.getElementById('tabS').classList.toggle('active',t==='signup');}
+function toggleFaq(el){const item=el.parentElement;item.classList.toggle('open');}
+window.openAuth=openAuth;window.closeAuth=closeAuth;
 </script>
-
 <script type="module" src="js/app.js"></script>
 <script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, doc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-import { getAuth, onAuthStateChanged, signOut, createUserWithEmailAndPassword, signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, updateProfile } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-
-const firebaseConfig = {
-  apiKey: "AIzaSyBJgtQp4ZrOPuUhmwiQw6FmOvt7nywudOc",
-  authDomain: "alphaconvert-d6d65.firebaseapp.com",
-  projectId: "alphaconvert-d6d65",
-  storageBucket: "alphaconvert-d6d65.firebasestorage.app",
-  messagingSenderId: "599445275974",
-  appId: "1:599445275974:web:9c19afd3c4f8219e3f9147"
-};
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-const auth = getAuth(app);
-const gProvider = new GoogleAuthProvider();
-let premiumShown = false;
-
-async function checkPremiumStatus(user) {
-  // Vérifie localStorage d'abord
-  const code = localStorage.getItem('premiumCode');
-  const expiry = localStorage.getItem('premiumExpiry');
-  if (code && expiry && new Date(expiry) > new Date()) return true;
-  // Vérifie Firestore
-  try {
-    const snap = await getDoc(doc(db, 'users', user.uid));
-    if (snap.exists() && snap.data().premiumExpiry) {
-      return new Date(snap.data().premiumExpiry) > new Date();
-    }
-  } catch(e) {}
-  return false;
-}
-
-onAuthStateChanged(auth, async user => {
-  if (user) {
-    const name = user.displayName || user.email.split('@')[0];
-    const initial = name[0].toUpperCase();
-
-    // Nav
-    document.getElementById('navGuest').style.display = 'none';
-    document.getElementById('navUser').style.display = 'block';
-    document.getElementById('navAvatar').textContent = initial;
-    document.getElementById('navName').textContent = name;
-    document.getElementById('dropName').textContent = name;
-    document.getElementById('dropEmail').textContent = user.email;
-
-    // Hero strip
-    document.getElementById('heroAuthStrip').style.display = 'flex';
-    document.getElementById('heroAvatar').textContent = initial;
-    document.getElementById('heroName').textContent = name;
-
-    // Premium check
-    const isPrem = await checkPremiumStatus(user);
-    if (isPrem) {
-      document.getElementById('navPremiumDot').style.display = 'block';
-      document.getElementById('dropPlan').textContent = '⭐ Premium';
-      document.getElementById('dropPlan').classList.remove('free');
-      document.getElementById('heroPremiumBadge').style.display = 'inline-flex';
-      // Toast
-      if (!premiumShown) {
-        premiumShown = true;
-        const toast = document.getElementById('premiumToast');
-        toast.textContent = `⭐ Bienvenue ${name}, membre Premium !`;
-        toast.classList.add('show');
-        setTimeout(() => toast.classList.remove('show'), 4000);
-      }
-    }
+import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import{getFirestore,doc,getDoc,updateDoc}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import{getAuth,onAuthStateChanged,signOut,createUserWithEmailAndPassword,signInWithEmailAndPassword,GoogleAuthProvider,signInWithPopup,updateProfile}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+const fc={apiKey:"AIzaSyBJgtQp4ZrOPuUhmwiQw6FmOvt7nywudOc",authDomain:"alphaconvert-d6d65.firebaseapp.com",projectId:"alphaconvert-d6d65",storageBucket:"alphaconvert-d6d65.firebasestorage.app",messagingSenderId:"599445275974",appId:"1:599445275974:web:9c19afd3c4f8219e3f9147"};
+const app=initializeApp(fc);const db=getFirestore(app);const auth=getAuth(app);const gp=new GoogleAuthProvider();
+let toastShown=false;
+async function checkPrem(u){const c=localStorage.getItem('premiumCode');const e=localStorage.getItem('premiumExpiry');if(c&&e&&new Date(e)>new Date())return true;try{const s=await getDoc(doc(db,'users',u.uid));if(s.exists()&&s.data().premiumExpiry)return new Date(s.data().premiumExpiry)>new Date();}catch(e){}return false;}
+onAuthStateChanged(auth,async u=>{
+  if(u){
+    const n=u.displayName||u.email.split('@')[0];const i=n[0].toUpperCase();
+    document.getElementById('navGuest').style.display='none';document.getElementById('navUser').style.display='block';
+    document.getElementById('navAv').textContent=i;document.getElementById('navName').textContent=n;
+    document.getElementById('ddName').textContent=n;document.getElementById('ddEmail').textContent=u.email;
+    document.getElementById('heroStrip').style.display='flex';document.getElementById('heroAv').textContent=i;document.getElementById('heroName').textContent=n;
+    const p=await checkPrem(u);
+    if(p){document.getElementById('navPremDot').style.display='block';document.getElementById('ddBadge').textContent='⭐ Premium';document.getElementById('ddBadge').classList.remove('free');document.getElementById('heroPremBadge').style.display='inline-flex';if(!toastShown){toastShown=true;const t=document.getElementById('premToast');t.textContent=`⭐ Bienvenue ${n}, membre Premium !`;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),4500);}}
     closeAuth();
-  } else {
-    document.getElementById('navGuest').style.display = 'flex';
-    document.getElementById('navUser').style.display = 'none';
-    document.getElementById('heroAuthStrip').style.display = 'none';
-  }
+  }else{document.getElementById('navGuest').style.display='flex';document.getElementById('navUser').style.display='none';document.getElementById('heroStrip').style.display='none';}
 });
-
-window.loginUser = async () => {
-  const email = document.getElementById('loginEmail').value.trim();
-  const pass = document.getElementById('loginPass').value;
-  const msg = document.getElementById('loginMsg');
-  const btn = document.getElementById('loginBtn');
-  if (!email || !pass) { msg.style.color='#ef4444'; msg.textContent='Remplis tous les champs.'; return; }
-  btn.disabled = true; btn.textContent = 'Connexion…';
-  try {
-    await signInWithEmailAndPassword(auth, email, pass);
-    msg.textContent = '';
-  } catch(e) {
-    msg.style.color = '#ef4444';
-    msg.textContent = e.code === 'auth/invalid-credential' ? '❌ Email ou mot de passe incorrect.' : '❌ Erreur. Réessaie.';
-  }
-  btn.disabled = false; btn.textContent = 'Se connecter';
-};
-
-window.signupUser = async () => {
-  const name = document.getElementById('signupName').value.trim();
-  const email = document.getElementById('signupEmail').value.trim();
-  const pass = document.getElementById('signupPass').value;
-  const msg = document.getElementById('signupMsg');
-  const btn = document.getElementById('signupBtn');
-  if (!name || !email || !pass) { msg.style.color='#ef4444'; msg.textContent='Remplis tous les champs.'; return; }
-  if (pass.length < 6) { msg.style.color='#ef4444'; msg.textContent='Mot de passe trop court (6 min).'; return; }
-  btn.disabled = true; btn.textContent = 'Création…';
-  try {
-    const cred = await createUserWithEmailAndPassword(auth, email, pass);
-    await updateProfile(cred.user, { displayName: name });
-    msg.textContent = '';
-  } catch(e) {
-    msg.style.color = '#ef4444';
-    msg.textContent = e.code === 'auth/email-already-in-use' ? '❌ Email déjà utilisé.' : '❌ Erreur. Réessaie.';
-  }
-  btn.disabled = false; btn.textContent = 'Créer mon compte';
-};
-
-window.loginGoogle = async () => {
-  try { await signInWithPopup(auth, gProvider); closeAuth(); } catch(e) { console.error(e); }
-};
-
-window.logoutUser = async () => {
-  await signOut(auth);
-  localStorage.removeItem('premiumCode');
-  localStorage.removeItem('premiumExpiry');
-  document.getElementById('userDropdown').classList.remove('open');
-};
+window.doLogin=async()=>{const e=document.getElementById('lEmail').value.trim();const p=document.getElementById('lPass').value;const m=document.getElementById('lMsg');const b=document.getElementById('lBtn');if(!e||!p){m.style.color='#ef4444';m.textContent='Remplis tous les champs.';return;}b.disabled=true;b.textContent='Connexion…';try{await signInWithEmailAndPassword(auth,e,p);m.textContent='';}catch(er){m.style.color='#ef4444';m.textContent=er.code==='auth/invalid-credential'?'❌ Email ou mot de passe incorrect.':'❌ Erreur. Réessaie.';}b.disabled=false;b.textContent='Se connecter';};
+window.doSignup=async()=>{const n=document.getElementById('sName').value.trim();const e=document.getElementById('sEmail').value.trim();const p=document.getElementById('sPass').value;const m=document.getElementById('sMsg');const b=document.getElementById('sBtn');if(!n||!e||!p){m.style.color='#ef4444';m.textContent='Remplis tous les champs.';return;}if(p.length<6){m.style.color='#ef4444';m.textContent='Mot de passe trop court (6 min).';return;}b.disabled=true;b.textContent='Création…';try{const c=await createUserWithEmailAndPassword(auth,e,p);await updateProfile(c.user,{displayName:n});m.textContent='';}catch(er){m.style.color='#ef4444';m.textContent=er.code==='auth/email-already-in-use'?'❌ Email déjà utilisé.':'❌ Erreur. Réessaie.';}b.disabled=false;b.textContent='Créer mon compte';};
+window.doGoogle=async()=>{try{await signInWithPopup(auth,gp);closeAuth();}catch(e){console.error(e);}};
+window.doLogout=async()=>{await signOut(auth);localStorage.removeItem('premiumCode');localStorage.removeItem('premiumExpiry');document.getElementById('userDD').classList.remove('open');};
 </script>
 </body>
 </html>
