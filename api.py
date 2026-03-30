@@ -301,3 +301,42 @@ async def download(url: str, format: str = "mp4", quality: str = "720"):
 @app.get("/health")
 async def health():
     return {"status": "ok", "rapidapi_keys": len(RAPIDAPI_KEYS)}
+
+
+# ── Chat → Telegram ───────────────────────────────────────────
+from pydantic import BaseModel
+
+SUPPORT_BOT_TOKEN = os.getenv("SUPPORT_BOT_TOKEN", "")
+SUPPORT_CHAT_ID   = os.getenv("SUPPORT_CHAT_ID", "")
+
+class ChatMessage(BaseModel):
+    message: str
+    plan: str = "Non sélectionné"
+    user: str = "Anonyme"
+
+@app.post("/chat")
+async def send_chat(data: ChatMessage):
+    if not SUPPORT_BOT_TOKEN or not SUPPORT_CHAT_ID:
+        raise HTTPException(status_code=503, detail="Chat non configuré")
+
+    text = (
+        f"💬 Nouveau message AlphaConvert\n\n"
+        f"👤 Utilisateur : {data.user}\n"
+        f"⭐ Plan : {data.plan}\n"
+        f"📝 Message :\n{data.message}"
+    )
+
+    try:
+        async with httpx.AsyncClient() as client:
+            r = await client.post(
+                f"https://api.telegram.org/bot{SUPPORT_BOT_TOKEN}/sendMessage",
+                json={"chat_id": SUPPORT_CHAT_ID, "text": text},
+                timeout=10
+            )
+            if r.status_code != 200:
+                raise HTTPException(status_code=500, detail="Erreur Telegram")
+    except httpx.RequestError as e:
+        logger.error(f"Telegram chat error: {e}")
+        raise HTTPException(status_code=500, detail="Erreur réseau")
+
+    return {"ok": True}
