@@ -5,12 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AlphaConvert — Téléchargeur YouTube & TikTok</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
 <style>
 /* ── FONTS ── */
-h1,h2,h3,h4,.logo,.step-num { font-family:'Syne',sans-serif; }
-body { font-family:'DM Sans',sans-serif; }
+* { font-family:'Plus Jakarta Sans',sans-serif; }
 
 /* ── NAV AUTH ── */
 .nav-auth { display:flex; align-items:center; gap:0.5rem; }
@@ -49,26 +48,6 @@ body { font-family:'DM Sans',sans-serif; }
 .hero-strip { display:flex; align-items:center; justify-content:center; gap:0.8rem; margin-bottom:1rem; flex-wrap:wrap; }
 .hero-user-badge { display:inline-flex; align-items:center; gap:0.5rem; background:#fff; border:1.5px solid #e5e7eb; border-radius:100px; padding:0.3rem 0.85rem 0.3rem 0.35rem; font-size:0.8rem; font-weight:600; color:#374151; box-shadow:0 2px 8px rgba(0,0,0,0.05); }
 .hero-prem-badge { display:inline-flex; align-items:center; gap:0.4rem; background:#fef3c7; color:#92400e; border:1.5px solid #fcd34d; border-radius:100px; padding:0.3rem 0.85rem; font-size:0.8rem; font-weight:700; }
-
-/* ── STATS SECTION ── */
-.stats-section { background:#0f0f1a; padding:3rem 2rem; }
-.stats-inner { max-width:900px; margin:0 auto; display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:2rem; text-align:center; }
-.stat-item {}
-.stat-num { font-family:'Syne',sans-serif; font-size:2.4rem; font-weight:800; color:#fff; letter-spacing:-0.03em; }
-.stat-num span { color:#4f46e5; }
-.stat-label { font-size:0.85rem; color:#6b7280; margin-top:0.3rem; }
-
-/* ── TESTIMONIALS ── */
-.testimonials { padding:4rem 2rem; background:#fff; border-top:1px solid #f0f0f5; }
-.testimonials-inner { max-width:1060px; margin:0 auto; }
-.testi-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:1.2rem; margin-top:3rem; }
-.testi-card { background:#f8f7ff; border:1px solid #ede9fe; border-radius:16px; padding:1.5rem; }
-.testi-stars { color:#f59e0b; font-size:0.85rem; margin-bottom:0.8rem; letter-spacing:2px; }
-.testi-text { font-size:0.9rem; color:#374151; line-height:1.6; margin-bottom:1rem; font-style:italic; }
-.testi-author { display:flex; align-items:center; gap:0.6rem; }
-.testi-av { width:34px; height:34px; border-radius:50%; background:linear-gradient(135deg,#4f46e5,#7c3aed); display:flex; align-items:center; justify-content:center; color:#fff; font-size:0.82rem; font-weight:700; }
-.testi-name { font-size:0.84rem; font-weight:700; color:#0f0f1a; }
-.testi-sub { font-size:0.75rem; color:#9ca3af; }
 
 /* ── FAQ ── */
 .faq-section { padding:4rem 2rem; background:#fafafa; border-top:1px solid #f0f0f5; }
@@ -262,27 +241,7 @@ body { font-family:'DM Sans',sans-serif; }
   </div>
 </section>
 
-<!-- STATS -->
-<div class="stats-section">
-  <div class="stats-inner">
-    <div class="stat-item">
-      <div class="stat-num">50<span>K+</span></div>
-      <div class="stat-label">Téléchargements réalisés</div>
-    </div>
-    <div class="stat-item">
-      <div class="stat-num">12<span>K+</span></div>
-      <div class="stat-label">Utilisateurs actifs</div>
-    </div>
-    <div class="stat-item">
-      <div class="stat-num">99<span>%</span></div>
-      <div class="stat-label">Taux de satisfaction</div>
-    </div>
-    <div class="stat-item">
-      <div class="stat-num">2<span>s</span></div>
-      <div class="stat-label">Temps moyen de téléchargement</div>
-    </div>
-  </div>
-</div>
+
 
 <!-- FEATURES -->
 <section class="features" id="features">
@@ -365,41 +324,7 @@ body { font-family:'DM Sans',sans-serif; }
   </div>
 </section>
 
-<!-- TESTIMONIALS -->
-<section class="testimonials">
-  <div class="testimonials-inner">
-    <div class="section-head">
-      <h2>Ce qu'ils en disent</h2>
-      <p>Des milliers d'utilisateurs font confiance à AlphaConvert.</p>
-    </div>
-    <div class="testi-grid">
-      <div class="testi-card">
-        <div class="testi-stars">★★★★★</div>
-        <p class="testi-text">"Le meilleur téléchargeur que j'ai utilisé. Rapide, propre, aucune pub. Je télécharge mes cours YouTube en MP3 tous les jours."</p>
-        <div class="testi-author">
-          <div class="testi-av">K</div>
-          <div><div class="testi-name">Kofi A.</div><div class="testi-sub">Étudiant · Accra</div></div>
-        </div>
-      </div>
-      <div class="testi-card">
-        <div class="testi-stars">★★★★★</div>
-        <p class="testi-text">"J'utilise le plan Premium 3 mois — 12$ pour des téléchargements illimités, c'est vraiment imbattable. Le support répond en 5 minutes sur Telegram."</p>
-        <div class="testi-author">
-          <div class="testi-av">F</div>
-          <div><div class="testi-name">Fatou D.</div><div class="testi-sub">Content creator · Dakar</div></div>
-        </div>
-      </div>
-      <div class="testi-card">
-        <div class="testi-stars">★★★★★</div>
-        <p class="testi-text">"Simple et efficace. Je télécharge des vidéos TikTok pour mes montages. La qualité HD est parfaite, rien à redire."</p>
-        <div class="testi-author">
-          <div class="testi-av">M</div>
-          <div><div class="testi-name">Moussa T.</div><div class="testi-sub">Monteur vidéo · Lomé</div></div>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
+
 
 <!-- FAQ -->
 <section class="faq-section" id="faq">
@@ -479,11 +404,7 @@ body { font-family:'DM Sans',sans-serif; }
 
 <!-- FOOTER -->
 <footer>
-  <p style="margin-bottom:0.5rem"><strong style="color:#fff">AlphaConvert</strong> — Téléchargeur YouTube &amp; TikTok</p>
-  <p style="margin-bottom:1rem">
-    <a href="support.html">Support</a> · <a href="premium.html">Premium</a> · <a href="#">Confidentialité</a> · <a href="#">Conditions</a>
-  </p>
-  <p>© 2026 AlphaConvert · Fait avec ❤️</p>
+  <p>AlphaConvert — Téléchargeur YouTube &amp; TikTok &nbsp;·&nbsp; © 2026 AlphaConvert</p>
 </footer>
 
 <!-- MODAL LIMITE -->
