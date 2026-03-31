@@ -97,23 +97,23 @@ async function checkSavedPremium() {
     localStorage.removeItem('premiumExpiry');
     return false;
   }
-  // FIX : si Firebase échoue ou est lent → on fait confiance au localStorage
+  // On fait confiance au localStorage en premier — Firebase sert uniquement à vérifier révocation
+  isPremium = true;
+  premiumExpiry = expiry;
   try {
     const ref = doc(db, 'premiumCodes', code);
     const snap = await getDoc(ref);
     if (!snap.exists() || snap.data().revoked) {
       localStorage.removeItem('premiumCode');
       localStorage.removeItem('premiumExpiry');
+      isPremium = false;
+      premiumExpiry = null;
       return false;
     }
+    // data.used est normal (le code a été activé par cet utilisateur), ne pas bloquer
   } catch {
-    // Firebase indispo → on fait confiance au localStorage, pas de blocage
-    isPremium = true;
-    premiumExpiry = expiry;
-    return true;
+    // Firebase indispo → on garde le premium actif
   }
-  isPremium = true;
-  premiumExpiry = expiry;
   return true;
 }
 
@@ -165,8 +165,7 @@ function updatePremiumBadge() {
   if (!badge || !counter) return;
 
   if (isPremium) {
-    const exp = new Date(premiumExpiry).toLocaleDateString('fr', {day:'2-digit', month:'long', year:'numeric'});
-    badge.innerHTML = `⭐ Premium actif — expire le ${exp}`;
+    badge.innerHTML = `⭐ Premium actif`;
     badge.style.color = '#f59e0b';
     badge.style.display = 'block';
     counter.style.display = 'none';
