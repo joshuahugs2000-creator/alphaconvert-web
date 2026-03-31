@@ -167,7 +167,7 @@ def safe_filename(name: str) -> str:
     return re.sub(r"[^\w\s\-.]", "_", name).strip()[:60] or "video"
 
 def _extract_yt_id(url: str) -> str:
-    m = re.search(r"(?:v=|youtu\.be/)([A-Za-z0-9_-]{11})", url)
+    m = re.search(r"(?:v=|youtu\.be/|/shorts/)([A-Za-z0-9_-]{11})", url)
     return m.group(1) if m else ""
 
 def _ydl_base(uid: str) -> dict:
@@ -207,14 +207,26 @@ def _serve(path: str, title: str) -> FileResponse:
 def _save_stream(dl_url: str, title: str, ext: str) -> str:
     """Télécharge un flux HTTP direct et le sauvegarde."""
     path = os.path.join(DOWNLOAD_PATH, f"{uuid.uuid4().hex[:8]}{ext}")
-    with httpx.stream(
-        "GET", dl_url, timeout=120, follow_redirects=True,
-        headers={"User-Agent": "Mozilla/5.0", "Referer": "https://www.tiktok.com/"}
-    ) as r:
-        r.raise_for_status()
+    # Headers complets : Range indispensable pour googlevideo, Referer pour TikTok CDN
+    is_yt = "googlevideo.com" in dl_url or "youtube" in dl_url
+    hdrs = {
+        "User-Agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Accept":          "*/*",
+        "Accept-Encoding": "identity",
+        "Range":           "bytes=0-",
+        "Referer":         "https://www.youtube.com/" if is_yt else "https://www.tiktok.com/",
+        "Origin":          "https://www.youtube.com" if is_yt else "https://www.tiktok.com",
+    }
+    with httpx.stream("GET", dl_url, timeout=300, follow_redirects=True, headers=hdrs) as r:
+        if r.status_code not in (200, 206):
+            raise RuntimeError(f"CDN a refuse : HTTP {r.status_code}")
         with open(path, "wb") as f:
             for chunk in r.iter_bytes(65536):
                 f.write(chunk)
+    size = os.path.getsize(path)
+    if size == 0:
+        raise RuntimeError("Fichier téléchargé vide (0 octet)")
+    logger.info(f"_save_stream OK: {os.path.basename(path)} ({size:,} bytes)")
     return path
 
 def _tiktok_rapidapi(url: str, fmt: str):
@@ -273,7 +285,7 @@ def _youtube_rapidapi_info(url: str) -> dict | None:
             title = d.get("title", "YouTube Video")
             # Miniature via proxy
             raw_thumb = f"https://img.youtube.com/vi/{vid}/hqdefault.jpg"
-            thumb = f"/thumbnail-proxy?url={urllib.parse.quote(raw_thumb)}"
+            thumb = raw_thumb
             return {
                 "title":     title,
                 "duration":  int(d.get("duration", 0) or 0),
@@ -432,15 +444,11 @@ async def get_info(url: str):
             with yt_dlp.YoutubeDL(opts) as ydl:
                 info = ydl.extract_info(url, download=False)
 
-            # Miniature — on passe par notre proxy pour YouTube
+            # Miniature directe — les <img> n'ont pas de restriction CORS
             thumb = info.get("thumbnail", "")
             if not thumb and platform == "youtube":
                 vid   = _extract_yt_id(url)
                 thumb = f"https://img.youtube.com/vi/{vid}/hqdefault.jpg" if vid else ""
-
-            # Encapsule l'URL de miniature dans notre proxy
-            if thumb and ("ytimg.com" in thumb or "youtube.com" in thumb):
-                thumb = f"/thumbnail-proxy?url={urllib.parse.quote(thumb)}"
 
             return {
                 "title":     info.get("title", "Video"),
@@ -464,11 +472,10 @@ async def get_info(url: str):
         # Dernier recours : miniature statique uniquement
         vid = _extract_yt_id(url)
         raw_thumb = f"https://img.youtube.com/vi/{vid}/hqdefault.jpg" if vid else ""
-        thumb_proxied = f"/thumbnail-proxy?url={urllib.parse.quote(raw_thumb)}" if raw_thumb else ""
         return {
             "title":     "YouTube Video",
             "duration":  0,
-            "thumbnail": thumb_proxied,
+            "thumbnail": raw_thumb,
             "uploader":  "YouTube",
             "platform":  platform,
         }
