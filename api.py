@@ -147,7 +147,7 @@ def safe_filename(name: str) -> str:
     return re.sub(r'[^\w\s\-.]', '_', name).strip() or "video"
 
 def _extract_yt_id(url: str) -> str:
-    m = re.search(r"(?:v=|youtu\.be/)([A-Za-z0-9_-]{11})", url)
+    m = re.search(r"(?:v=|youtu\.be/|/shorts/)([A-Za-z0-9_-]{11})", url)
     return m.group(1) if m else url
 
 def _save_stream(dl_url: str, title: str, ext: str) -> str:
@@ -295,7 +295,21 @@ async def download(url: str, format: str = "mp4", quality: str = "720"):
 
     file_path, title, is_redirect = _rapi_download(url, platform, format)
     if file_path:
-        if is_redirect: return RedirectResponse(url=file_path)
+        if is_redirect:
+            # Stream forcé via le backend → Content-Disposition attachment
+            # (RedirectResponse = navigateur joue la vidéo sans télécharger)
+            from fastapi.responses import StreamingResponse as _SR
+            _dl = f"{safe_filename(title)}.mp4"
+            _safe = _dl.encode('ascii', errors='replace').decode('ascii')
+            _url  = file_path
+            def _gen():
+                with httpx.stream("GET", _url, timeout=300, follow_redirects=True,
+                                  headers={"User-Agent": "Mozilla/5.0",
+                                           "Referer": "https://www.youtube.com/",
+                                           "Range": "bytes=0-"}) as r:
+                    for c in r.iter_bytes(65536): yield c
+            return _SR(_gen(), media_type="video/mp4",
+                       headers={"Content-Disposition": 'attachment; filename="' + _safe + '"'})
         if os.path.exists(file_path):
             ext     = os.path.splitext(file_path)[1]
             dl_name = f"{safe_filename(title)}{ext}"
