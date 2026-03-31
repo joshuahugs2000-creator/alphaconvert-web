@@ -2,10 +2,10 @@ import os
 import logging
 import httpx
 import urllib.parse
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import JSONResponse, StreamingResponse, Response
+from fastapi.responses import JSONResponse, StreamingResponse, Response, RedirectResponse
 from pydantic import BaseModel
 
 logging.basicConfig(level=logging.INFO, format="%(name)s:%(message)s")
@@ -62,15 +62,15 @@ def detect_platform(url: str):
         return "tiktok"
     return "unknown"
 
-async def resolve_tiktok_url(url: str) -> str:
-    """Resolve short TikTok URLs (vt.tiktok.com, vm.tiktok.com) to full URL."""
+async def resolve_short_url(url: str) -> str:
+    """Résout les liens courts TikTok (vt.tiktok.com, vm.tiktok.com)."""
     if "vt.tiktok.com" in url or "vm.tiktok.com" in url:
         try:
-            async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:
-                r = await client.get(url, headers={"User-Agent": "Mozilla/5.0"})
+            async with httpx.AsyncClient(timeout=10, follow_redirects=True) as c:
+                r = await c.get(url, headers={"User-Agent": "Mozilla/5.0"})
                 return str(r.url)
         except Exception as e:
-            logger.warning(f"Failed to resolve short TikTok URL: {e}")
+            logger.warning(f"Short URL resolve failed: {e}")
     return url
 
 def sanitize_filename(name: str) -> str:
@@ -105,40 +105,17 @@ async def get_info(url: str):
         try:
             if platform == "youtube":
                 vid = extract_yt_id(url)
-
-                # Essayer yt-api pour info complète
-                try:
-                    r = await client.get(
-                        "https://yt-api.p.rapidapi.com/dl",
-                        params={"id": vid, "cgeo": "US"},
-                        headers={"X-RapidAPI-Key": api_key, "X-RapidAPI-Host": "yt-api.p.rapidapi.com"}
-                    )
-                    if r.status_code == 200:
-                        d = r.json()
-                        if d.get("title"):
-                            dur = int(d.get("lengthSeconds", 0) or 0)
-                            thumb = (d.get("thumbnail") or [{}])[-1].get("url") or f"https://img.youtube.com/vi/{vid}/hqdefault.jpg"
-                            return {
-                                "title": d.get("title", ""),
-                                "duration": dur,
-                                "thumbnail": thumb,
-                                "uploader": d.get("author", ""),
-                                "platform": "youtube"
-                            }
-                except Exception as e:
-                    logger.warning(f"yt-api info failed: {e}")
-
-                # Fallback youtube-mp36
-                r2 = await client.get(
+                # youtube-mp36 pour les infos — simple et fiable
+                r = await client.get(
                     "https://youtube-mp36.p.rapidapi.com/dl",
                     params={"id": vid},
                     headers={"X-RapidAPI-Key": api_key, "X-RapidAPI-Host": "youtube-mp36.p.rapidapi.com"}
                 )
-                if r2.status_code == 200:
-                    d2 = r2.json()
-                    dur = int(float(d2.get("duration", 0) or 0))
+                if r.status_code == 200:
+                    d = r.json()
+                    dur = int(float(d.get("duration", 0) or 0))
                     return {
-                        "title": d2.get("title", "YouTube"),
+                        "title": d.get("title", "YouTube"),
                         "duration": dur,
                         "thumbnail": f"https://img.youtube.com/vi/{vid}/hqdefault.jpg",
                         "uploader": "YouTube",
@@ -146,11 +123,11 @@ async def get_info(url: str):
                     }
 
             elif platform == "tiktok":
-                resolved_url = await resolve_tiktok_url(url)
-                logger.info(f"TikTok URL resolved: {resolved_url[:80]}")
+                resolved = await resolve_short_url(url)
+                logger.info(f"TikTok resolved: {resolved[:80]}")
                 r = await client.get(
                     "https://tiktok-scraper7.p.rapidapi.com/video/info",
-                    params={"url": resolved_url, "hd": "1"},
+                    params={"url": resolved, "hd": "1"},
                     headers={"X-RapidAPI-Key": api_key, "X-RapidAPI-Host": "tiktok-scraper7.p.rapidapi.com"}
                 )
                 if r.status_code == 200:
@@ -163,7 +140,7 @@ async def get_info(url: str):
                         "platform": "tiktok"
                     }
                 else:
-                    logger.error(f"TikTok scraper7 /info returned {r.status_code}: {r.text[:200]}")
+                    logger.error(f"TikTok /info {r.status_code}: {r.text[:200]}")
 
         except Exception as e:
             logger.error(f"Info error [{platform}]: {e}")
@@ -179,13 +156,13 @@ async def download(url: str, format: str = "mp4", quality: str = "720"):
 
     platform = detect_platform(url)
 
-    async with make_client(90) as client:
+    async with make_client(60) as client:
         try:
             if platform == "youtube":
                 vid = extract_yt_id(url)
 
                 if format == "mp3":
-                    # MP3 via youtube-mp36 — stream direct
+                    # MP3 : youtube-mp36 → stream
                     r = await client.get(
                         "https://youtube-mp36.p.rapidapi.com/dl",
                         params={"id": vid},
@@ -196,78 +173,85 @@ async def download(url: str, format: str = "mp4", quality: str = "720"):
                         link = d.get("link")
                         if link:
                             title = sanitize_filename(d.get("title", "audio"))
-                            stream_resp = await client.get(link)
-                            return StreamingResponse(
-                                iter([stream_resp.content]),
-                                headers={
+                            async with client.stream("GET", link) as stream:
+                                headers = {
                                     "Content-Disposition": f'attachment; filename="{title}.mp3"',
                                     "Content-Type": "audio/mpeg",
-                                    "Content-Length": str(len(stream_resp.content)),
                                 }
-                            )
+                                cl = stream.headers.get("content-length")
+                                if cl:
+                                    headers["Content-Length"] = cl
+                                return StreamingResponse(stream.aiter_bytes(32768), headers=headers)
 
                 else:
-                    # MP4 via yt-api — stream pour forcer le téléchargement
-                    try:
-                        r = await client.get(
-                            "https://yt-api.p.rapidapi.com/dl",
-                            params={"id": vid, "cgeo": "US"},
-                            headers={"X-RapidAPI-Key": api_key, "X-RapidAPI-Host": "yt-api.p.rapidapi.com"}
-                        )
-                        if r.status_code == 200:
-                            d = r.json()
-                            formats = d.get("formats", []) + d.get("adaptiveFormats", [])
-                            target_h = int(quality)
-                            mp4s = [f for f in formats
-                                    if f.get("mimeType", "").startswith("video/mp4")
-                                    and f.get("url")
-                                    and f.get("height", 0) <= target_h]
-                            if mp4s:
-                                best = sorted(mp4s, key=lambda x: x.get("height", 0), reverse=True)[0]
-                                dl_url = best["url"]
-                                title = sanitize_filename(d.get("title", "video"))
-                                # Stream en chunks pour forcer le téléchargement
-                                # Download complet puis envoyer (évite les coupures 0-octet)
-                                dl_resp = await client.get(dl_url)
-                                if dl_resp.status_code == 200 and len(dl_resp.content) > 0:
-                                    return StreamingResponse(
-                                        iter([dl_resp.content]),
-                                        headers={
-                                            "Content-Disposition": f'attachment; filename="{title}.mp4"',
-                                            "Content-Type": "video/mp4",
-                                            "Content-Length": str(len(dl_resp.content)),
-                                        }
-                                    )
-                                logger.warning(f"yt-api MP4 download empty, content length: {len(dl_resp.content)}")
-                    except Exception as e:
-                        logger.warning(f"yt-api MP4 failed: {e}")
+                    # MP4 : yt-api → on récupère l'URL directe et on stream
+                    r = await client.get(
+                        "https://yt-api.p.rapidapi.com/dl",
+                        params={"id": vid, "cgeo": "US"},
+                        headers={"X-RapidAPI-Key": api_key, "X-RapidAPI-Host": "yt-api.p.rapidapi.com"}
+                    )
+                    if r.status_code == 200:
+                        d = r.json()
+                        all_formats = d.get("formats", []) + d.get("adaptiveFormats", [])
+                        target_h = int(quality)
+                        # Chercher le meilleur MP4 avec audio intégré
+                        mp4s = [
+                            f for f in all_formats
+                            if f.get("mimeType", "").startswith("video/mp4")
+                            and f.get("url")
+                            and f.get("height", 0) <= target_h
+                            and f.get("audioQuality")  # a de l'audio
+                        ]
+                        if not mp4s:
+                            # Fallback sans filtre audio
+                            mp4s = [
+                                f for f in all_formats
+                                if f.get("mimeType", "").startswith("video/mp4")
+                                and f.get("url")
+                                and f.get("height", 0) <= target_h
+                            ]
+                        if mp4s:
+                            best = sorted(mp4s, key=lambda x: x.get("height", 0), reverse=True)[0]
+                            dl_url = best["url"]
+                            title = sanitize_filename(d.get("title", "video"))
+                            logger.info(f"YT MP4 stream: {best.get('height')}p")
+                            async with client.stream("GET", dl_url) as stream:
+                                headers = {
+                                    "Content-Disposition": f'attachment; filename="{title}.mp4"',
+                                    "Content-Type": "video/mp4",
+                                }
+                                cl = stream.headers.get("content-length")
+                                if cl:
+                                    headers["Content-Length"] = cl
+                                return StreamingResponse(stream.aiter_bytes(65536), headers=headers)
 
-                    # Fallback youtube-mp36
+                    # Fallback youtube-mp36 (MP4 limité mais fonctionne)
+                    logger.warning("yt-api MP4 failed, fallback youtube-mp36")
                     r2 = await client.get(
                         "https://youtube-mp36.p.rapidapi.com/dl",
-                        params={"id": vid, "format": "mp4"},
+                        params={"id": vid},
                         headers={"X-RapidAPI-Key": api_key, "X-RapidAPI-Host": "youtube-mp36.p.rapidapi.com"}
                     )
                     if r2.status_code == 200:
                         d2 = r2.json()
-                        link = d2.get("link") or d2.get("url")
+                        link = d2.get("link")
                         if link:
                             title = sanitize_filename(d2.get("title", "video"))
-                            stream_resp = await client.get(link)
-                            return StreamingResponse(
-                                iter([stream_resp.content]),
-                                headers={
+                            async with client.stream("GET", link) as stream:
+                                headers = {
                                     "Content-Disposition": f'attachment; filename="{title}.mp4"',
                                     "Content-Type": "video/mp4",
-                                    "Content-Length": str(len(stream_resp.content)),
                                 }
-                            )
+                                cl = stream.headers.get("content-length")
+                                if cl:
+                                    headers["Content-Length"] = cl
+                                return StreamingResponse(stream.aiter_bytes(32768), headers=headers)
 
             elif platform == "tiktok":
-                resolved_url = await resolve_tiktok_url(url)
+                resolved = await resolve_short_url(url)
                 r = await client.get(
                     "https://tiktok-scraper7.p.rapidapi.com/video/info",
-                    params={"url": resolved_url, "hd": "1"},
+                    params={"url": resolved, "hd": "1"},
                     headers={"X-RapidAPI-Key": api_key, "X-RapidAPI-Host": "tiktok-scraper7.p.rapidapi.com"}
                 )
                 if r.status_code == 200:
@@ -276,25 +260,23 @@ async def download(url: str, format: str = "mp4", quality: str = "720"):
 
                     if format == "mp3":
                         dl_url = d.get("music_info", {}).get("play") or d.get("wmplay") or d.get("play")
-                        content_type = "audio/mpeg"
-                        ext = "mp3"
+                        ctype, ext = "audio/mpeg", "mp3"
                     else:
                         dl_url = d.get("hdplay") or d.get("play") or d.get("wmplay")
-                        content_type = "video/mp4"
-                        ext = "mp4"
+                        ctype, ext = "video/mp4", "mp4"
 
                     if dl_url:
                         async with client.stream("GET", dl_url, headers={"User-Agent": "Mozilla/5.0"}) as stream:
                             headers = {
                                 "Content-Disposition": f'attachment; filename="{title}.{ext}"',
-                                "Content-Type": content_type,
+                                "Content-Type": ctype,
                             }
-                            ct = stream.headers.get("content-length")
-                            if ct:
-                                headers["Content-Length"] = ct
-                            return StreamingResponse(stream.aiter_bytes(chunk_size=65536), headers=headers)
+                            cl = stream.headers.get("content-length")
+                            if cl:
+                                headers["Content-Length"] = cl
+                            return StreamingResponse(stream.aiter_bytes(65536), headers=headers)
                 else:
-                    logger.error(f"TikTok download scraper7 returned {r.status_code}: {r.text[:200]}")
+                    logger.error(f"TikTok download {r.status_code}: {r.text[:200]}")
 
         except Exception as e:
             logger.error(f"Download error [{platform}]: {e}")
