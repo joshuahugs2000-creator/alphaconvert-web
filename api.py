@@ -82,13 +82,13 @@ async def get_info(url: str):
         return JSONResponse({"error": "No API key"}, status_code=500)
 
     video_id = extract_video_id(url)
-    proxies = {"http://": PROXY_URL, "https://": PROXY_URL} if PROXY_URL else None
+    # proxy géré directement
     headers = {
         "x-rapidapi-key": api_key,
         "x-rapidapi-host": "youtube-mp36.p.rapidapi.com"
     }
 
-    async with httpx.AsyncClient(proxies=proxies, timeout=30) as client:
+    async with httpx.AsyncClient(proxy=PROXY_URL if PROXY_URL else None, timeout=30) as client:
         try:
             resp = await client.get(
                 "https://youtube-mp36.p.rapidapi.com/dl",
@@ -111,13 +111,13 @@ async def download(url: str):
         return JSONResponse({"error": "No API key"}, status_code=500)
 
     video_id = extract_video_id(url)
-    proxies = {"http://": PROXY_URL, "https://": PROXY_URL} if PROXY_URL else None
+    # proxy géré directement
     headers = {
         "x-rapidapi-key": api_key,
         "x-rapidapi-host": "youtube-mp36.p.rapidapi.com"
     }
 
-    async with httpx.AsyncClient(proxies=proxies, timeout=60) as client:
+    async with httpx.AsyncClient(proxy=PROXY_URL if PROXY_URL else None, timeout=60) as client:
         try:
             resp = await client.get(
                 "https://youtube-mp36.p.rapidapi.com/dl",
