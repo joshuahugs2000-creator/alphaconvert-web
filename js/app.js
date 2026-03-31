@@ -58,55 +58,78 @@ function todayKey() {
   return new Date().toISOString().split('T')[0];
 }
 
-// ── PREMIUM ───────────────────────────────────────────────────
+// ── PREMIUM ─────────────────────────────────────────────────
+// La source de vérité = localStorage UNIQUEMENT
+// Firebase est utilisé seulement pour activer un nouveau code
 let isPremium = false;
 let premiumExpiry = null;
 
-async function checkPremiumCode(code) {
-  try {
-    const ref = doc(db, 'premiumCodes', code.toUpperCase().trim());
-    const snap = await getDoc(ref);
-    if (!snap.exists()) return { valid: false, msg: '❌ Code invalide.' };
-    const data = snap.data();
-    if (data.used) return { valid: false, msg: '❌ Ce code a déjà été utilisé.' };
-    const expiry = new Date(data.expiresAt);
-    if (expiry < new Date()) return { valid: false, msg: '❌ Ce code est expiré.' };
-    const cid = await getClientId();
-    await updateDoc(ref, { used: true, usedBy: cid, usedAt: new Date().toISOString() });
-    localStorage.setItem('premiumCode', code.toUpperCase().trim());
-    localStorage.setItem('premiumExpiry', data.expiresAt);
-    return { valid: true, expiry: data.expiresAt, label: data.label };
-  } catch (e) {
-    return { valid: false, msg: '❌ Erreur de vérification.' };
-  }
-}
-
-async function checkSavedPremium() {
+function checkLocalPremium() {
+  // Vérification rapide et fiable depuis localStorage
   const code   = localStorage.getItem('premiumCode');
   const expiry = localStorage.getItem('premiumExpiry');
   if (!code || !expiry) return false;
   if (new Date(expiry) < new Date()) {
+    // Expiré → on nettoie
     localStorage.removeItem('premiumCode');
     localStorage.removeItem('premiumExpiry');
     return false;
   }
-  try {
-    const ref  = doc(db, 'premiumCodes', code);
-    const snap = await getDoc(ref);
-    if (!snap.exists() || snap.data().revoked) {
-      localStorage.removeItem('premiumCode');
-      localStorage.removeItem('premiumExpiry');
-      return false;
-    }
-  } catch { return false; }
-  isPremium    = true;
+  // Valide !
+  isPremium     = true;
   premiumExpiry = expiry;
   return true;
 }
 
-// ── LIMITE DE TÉLÉCHARGEMENT ──────────────────────────────────
+async function checkSavedPremium() {
+  // D'abord vérification locale instantanée
+  if (checkLocalPremium()) return true;
+
+  // Sinon vérification Firebase (pour les comptes connectés)
+  try {
+    const ref  = doc(db, 'premiumCodes', localStorage.getItem('premiumCode') || '__none__');
+    const snap = await getDoc(ref);
+    if (snap.exists() && !snap.data().revoked) {
+      const expiry = snap.data().expiresAt;
+      if (expiry && new Date(expiry) > new Date()) {
+        localStorage.setItem('premiumExpiry', expiry);
+        isPremium     = true;
+        premiumExpiry = expiry;
+        return true;
+      }
+    }
+  } catch {}
+  return false;
+}
+
+async function checkPremiumCode(code) {
+  try {
+    const ref  = doc(db, 'premiumCodes', code.toUpperCase().trim());
+    const snap = await getDoc(ref);
+    if (!snap.exists()) return { valid: false, msg: '❌ Code invalide.' };
+    const data = snap.data();
+    // Ne pas bloquer si used = true MAIS usedBy = ce même client
+    const cid = await getClientId();
+    if (data.used && data.usedBy !== cid) return { valid: false, msg: '❌ Ce code a déjà été utilisé.' };
+    const expiry = new Date(data.expiresAt);
+    if (expiry < new Date()) return { valid: false, msg: '❌ Ce code est expiré.' };
+    // Marquer comme utilisé
+    await updateDoc(ref, { used: true, usedBy: cid, usedAt: new Date().toISOString() });
+    // Sauvegarder localement
+    localStorage.setItem('premiumCode', code.toUpperCase().trim());
+    localStorage.setItem('premiumExpiry', data.expiresAt);
+    return { valid: true, expiry: data.expiresAt, label: data.label };
+  } catch (e) {
+    console.error(e);
+    return { valid: false, msg: '❌ Erreur de vérification.' };
+  }
+}
+
+// ── LIMITE ───────────────────────────────────────────────────
 async function canDownload() {
-  if (isPremium) return { allowed: true };   // ← PREMIUM BYPASS
+  // PREMIUM → toujours autorisé, sans vérifier Firebase
+  if (isPremium) return { allowed: true };
+
   const cid   = await getClientId();
   const today = todayKey();
   const ref   = doc(db, 'limits', `${cid}_${today}`);
@@ -120,7 +143,7 @@ async function canDownload() {
 }
 
 async function recordDownload() {
-  if (isPremium) return;   // ← PAS D'ENREGISTREMENT POUR PREMIUM
+  if (isPremium) return;
   const cid   = await getClientId();
   const today = todayKey();
   const ref   = doc(db, 'limits', `${cid}_${today}`);
@@ -145,7 +168,7 @@ async function getDownloadCount() {
   } catch { return 0; }
 }
 
-// ── BADGE PREMIUM / COMPTEUR ──────────────────────────────────
+// ── BADGE PREMIUM / COMPTEUR ─────────────────────────────────
 function updatePremiumBadge() {
   const badge   = document.getElementById('premiumBadge');
   const counter = document.getElementById('dlCounter');
@@ -153,7 +176,7 @@ function updatePremiumBadge() {
 
   if (isPremium) {
     const exp = new Date(premiumExpiry).toLocaleDateString('fr', { day: '2-digit', month: 'long', year: 'numeric' });
-    badge.innerHTML = `⭐ Premium actif — expire le ${exp}`;
+    badge.innerHTML     = `⭐ Premium actif — expire le ${exp}`;
     badge.style.color   = '#f59e0b';
     badge.style.display = 'block';
     counter.style.display = 'none';
@@ -161,14 +184,14 @@ function updatePremiumBadge() {
     badge.style.display = 'none';
     getDownloadCount().then(count => {
       const left = Math.max(0, DAILY_LIMIT - count);
-      counter.textContent = `${left} téléchargement${left > 1 ? 's' : ''} gratuit${left > 1 ? 's' : ''} restant aujourd'hui`;
+      counter.textContent   = `${left} téléchargement${left > 1 ? 's' : ''} gratuit${left > 1 ? 's' : ''} restant aujourd'hui`;
       counter.style.color   = left <= 1 ? '#ef4444' : '#6b7280';
       counter.style.display = 'block';
     });
   }
 }
 
-// ── TABS ─────────────────────────────────────────────────────
+// ── TABS / FORMATS ───────────────────────────────────────────
 const tabPlaceholders = {
   yt: 'Colle ton lien YouTube ici…',
   tt: 'Colle ton lien TikTok ici…'
@@ -223,10 +246,9 @@ function hideResult() {
   document.getElementById('loader')?.classList.remove('show');
 }
 
-// ── DURÉE ─────────────────────────────────────────────────────
 function fmtDur(sec) {
   if (!sec) return '';
-  const s = Math.round(Number(sec));   // ← FIX float comme 162.77
+  const s = Math.round(Number(sec));
   const m = Math.floor(s / 60);
   return `${m}:${String(s % 60).padStart(2, '0')}`;
 }
@@ -239,7 +261,7 @@ function dlIcon() {
   </svg>`;
 }
 
-// ── ANALYZE ───────────────────────────────────────────────────
+// ── ANALYZE ──────────────────────────────────────────────────
 async function analyze() {
   const url = document.getElementById('urlInput')?.value.trim();
   if (!url) { document.getElementById('urlInput')?.focus(); return; }
@@ -254,9 +276,8 @@ async function analyze() {
     document.getElementById('loaderText').textContent = 'Analyse du lien en cours…';
 
   try {
-    const res = await fetch(`${BACKEND}/info?url=${encodeURIComponent(url)}`);
+    const res  = await fetch(`${BACKEND}/info?url=${encodeURIComponent(url)}`);
     const data = await res.json();
-
     loader?.classList.remove('show');
 
     if (!res.ok || data.error) {
@@ -264,10 +285,10 @@ async function analyze() {
       return;
     }
 
-    document.getElementById('rThumb').src = data.thumbnail || '';
-    document.getElementById('rTitle').textContent = data.title || 'Vidéo';
+    document.getElementById('rThumb').src            = data.thumbnail || '';
+    document.getElementById('rTitle').textContent    = data.title || 'Vidéo';
     const dur = data.duration ? ` · ${fmtDur(data.duration)}` : '';
-    document.getElementById('rMeta').textContent = (data.uploader || data.platform || '') + dur;
+    document.getElementById('rMeta').textContent     = (data.uploader || '') + dur;
 
     const fmts = tabFormats[currentTab] || tabFormats.yt;
     document.getElementById('dlGrid').innerHTML = fmts.map(f => `
@@ -300,7 +321,12 @@ async function handleDownload(e, encodedUrl, fmt, q) {
 // ── MODALS ────────────────────────────────────────────────────
 function showLimitModal()  { document.getElementById('limitModal').style.display = 'flex'; }
 function closeLimitModal() { document.getElementById('limitModal').style.display = 'none'; }
-function openCodeModal()   { closeLimitModal(); document.getElementById('codeModal').style.display = 'flex'; document.getElementById('codeInput').value = ''; document.getElementById('codeMsg').textContent = ''; }
+function openCodeModal()   {
+  closeLimitModal();
+  document.getElementById('codeModal').style.display = 'flex';
+  document.getElementById('codeInput').value = '';
+  document.getElementById('codeMsg').textContent = '';
+}
 function closeCodeModal()  { document.getElementById('codeModal').style.display = 'none'; }
 
 async function activateCode() {
@@ -328,9 +354,13 @@ async function activateCode() {
 
 // ── INIT ──────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
-  await checkSavedPremium();
+  // Vérification locale INSTANTANÉE avant tout — pas d'attente Firebase
+  checkLocalPremium();
   updatePremiumBadge();
   renderFormats('yt');
+
+  // Vérification Firebase en arrière-plan (non bloquante)
+  checkSavedPremium().then(() => updatePremiumBadge());
 
   document.getElementById('urlInput')?.addEventListener('keydown', e => {
     if (e.key === 'Enter') analyze();
@@ -338,12 +368,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 // Expose
-window.switchTab      = switchTab;
-window.selectFmt      = selectFmt;
-window.analyze        = analyze;
-window.handleDownload = handleDownload;
-window.showLimitModal = showLimitModal;
-window.closeLimitModal= closeLimitModal;
-window.openCodeModal  = openCodeModal;
-window.closeCodeModal = closeCodeModal;
-window.activateCode   = activateCode;
+window.switchTab       = switchTab;
+window.selectFmt       = selectFmt;
+window.analyze         = analyze;
+window.handleDownload  = handleDownload;
+window.showLimitModal  = showLimitModal;
+window.closeLimitModal = closeLimitModal;
+window.openCodeModal   = openCodeModal;
+window.closeCodeModal  = closeCodeModal;
+window.activateCode    = activateCode;
