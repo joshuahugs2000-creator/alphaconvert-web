@@ -341,12 +341,41 @@ async function handleDownload(e, encodedUrl, fmt, q) {
   await recordDownload();
   updatePremiumBadge();
 
-  const a = document.createElement('a');
-  a.href = `${BACKEND}/download?url=${encodedUrl}&format=${fmt}&quality=${q}`;
-  a.download = '';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
+  const downloadUrl = `${BACKEND}/download?url=${encodedUrl}&format=${fmt}&quality=${q}`;
+  const ext = fmt === 'mp3' ? 'mp3' : 'mp4';
+
+  // Afficher un indicateur de chargement sur le bouton cliqué
+  const btn = e.currentTarget || e.target;
+  const originalHTML = btn.innerHTML;
+  btn.innerHTML = '⏳ Téléchargement…';
+  btn.style.pointerEvents = 'none';
+
+  try {
+    // fetch + blob force le téléchargement même cross-origin
+    const response = await fetch(downloadUrl);
+    if (!response.ok) throw new Error('Erreur serveur');
+    const blob = await response.blob();
+    const blobUrl = URL.createObjectURL(blob);
+
+    // Récupérer le nom du fichier depuis le header si disponible
+    const disposition = response.headers.get('Content-Disposition') || '';
+    const match = disposition.match(/filename="?([^"]+)"?/);
+    const filename = match ? match[1] : `video.${ext}`;
+
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+  } catch (err) {
+    alert('Erreur lors du téléchargement. Réessaie.');
+    console.error(err);
+  } finally {
+    btn.innerHTML = originalHTML;
+    btn.style.pointerEvents = '';
+  }
 }
 
 // ── LIMIT MODAL ───────────────────────────────────────────────
