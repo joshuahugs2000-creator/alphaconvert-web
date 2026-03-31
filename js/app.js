@@ -65,8 +65,23 @@ function todayKey() {
 }
 
 // ── PREMIUM ───────────────────────────────────────────────────
+// Vérification SYNCHRONE dès le chargement du script — avant tout le reste
 let isPremium = false;
 let premiumExpiry = null;
+
+(function checkPremiumSync() {
+  const code = localStorage.getItem('premiumCode');
+  const expiry = localStorage.getItem('premiumExpiry');
+  if (!code || !expiry) return;
+  const exp = new Date(expiry);
+  if (exp < new Date()) {
+    localStorage.removeItem('premiumCode');
+    localStorage.removeItem('premiumExpiry');
+    return;
+  }
+  isPremium = true;
+  premiumExpiry = expiry;
+})();
 
 async function checkPremiumCode(code) {
   try {
@@ -88,24 +103,12 @@ async function checkPremiumCode(code) {
 }
 
 async function checkSavedPremium() {
-  // Vérification locale d'abord — instantané, pas de latence Firebase
+  // isPremium est déjà positionné de manière synchrone au chargement du script.
+  // Cette fonction fait juste la vérification Firebase en arrière-plan
+  // pour détecter si un code a été révoqué.
   const code = localStorage.getItem('premiumCode');
-  const expiry = localStorage.getItem('premiumExpiry');
-  if (!code || !expiry) return false;
+  if (!code || !isPremium) return isPremium;
 
-  const exp = new Date(expiry);
-  if (exp < new Date()) {
-    localStorage.removeItem('premiumCode');
-    localStorage.removeItem('premiumExpiry');
-    return false;
-  }
-
-  // localStorage valide → Premium actif immédiatement
-  isPremium = true;
-  premiumExpiry = expiry;
-
-  // Vérification Firebase en arrière-plan (non-bloquante)
-  // Si Firebase dit que le code est révoqué, on retire le premium
   getDoc(doc(db, 'premiumCodes', code)).then(snap => {
     if (snap.exists() && snap.data().revoked) {
       isPremium = false;
@@ -115,10 +118,10 @@ async function checkSavedPremium() {
       updatePremiumBadge();
     }
   }).catch(() => {
-    // Firebase indispo → on garde le premium local, pas de pénalité
+    // Firebase indispo → on garde le premium local
   });
 
-  return true;
+  return isPremium;
 }
 
 // ── DOWNLOAD LIMIT ────────────────────────────────────────────
