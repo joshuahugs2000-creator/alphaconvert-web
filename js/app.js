@@ -341,10 +341,14 @@ async function handleDownload(e, encodedUrl, fmt, q) {
   await recordDownload();
   updatePremiumBadge();
 
-  // window.open → le backend envoie Content-Disposition: attachment
-  // ce qui force le téléchargement sans problème CORS
+  // Le backend stream avec Content-Disposition: attachment → téléchargement direct
   const downloadUrl = `${BACKEND}/download?url=${encodedUrl}&format=${fmt}&quality=${q}`;
-  window.open(downloadUrl, '_blank');
+  const a = document.createElement('a');
+  a.href = downloadUrl;
+  a.download = '';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
 }
 
 // ── LIMIT MODAL ───────────────────────────────────────────────
