@@ -7,7 +7,7 @@ const DAILY_LIMIT = 3;
 
 // ── FIREBASE ─────────────────────────────────────────────────
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, doc, getDoc, setDoc, updateDoc, increment, collection }
+import { getFirestore, doc, getDoc, setDoc, updateDoc, increment }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -32,7 +32,6 @@ function getFingerprint() {
     navigator.hardwareConcurrency || '',
     navigator.platform || ''
   ].join('|');
-  // Simple hash
   let hash = 0;
   for (let i = 0; i < raw.length; i++) {
     hash = ((hash << 5) - hash) + raw.charCodeAt(i);
@@ -50,7 +49,7 @@ async function getIP() {
   } catch { return 'unknown'; }
 }
 
-// ── CLIENT ID = fingerprint + ip ─────────────────────────────
+// ── CLIENT ID ─────────────────────────────────────────────────
 let clientId = null;
 async function getClientId() {
   if (clientId) return clientId;
@@ -62,10 +61,10 @@ async function getClientId() {
 
 // ── TODAY KEY ─────────────────────────────────────────────────
 function todayKey() {
-  return new Date().toISOString().split('T')[0]; // ex: "2026-03-17"
+  return new Date().toISOString().split('T')[0];
 }
 
-// ── PREMIUM CODE CHECK ────────────────────────────────────────
+// ── PREMIUM ───────────────────────────────────────────────────
 let isPremium = false;
 let premiumExpiry = null;
 
@@ -78,10 +77,8 @@ async function checkPremiumCode(code) {
     if (data.used) return { valid: false, msg: '❌ Ce code a déjà été utilisé.' };
     const expiry = new Date(data.expiresAt);
     if (expiry < new Date()) return { valid: false, msg: '❌ Ce code est expiré.' };
-    // Marquer comme utilisé + lier au clientId
     const cid = await getClientId();
     await updateDoc(ref, { used: true, usedBy: cid, usedAt: new Date().toISOString() });
-    // Sauvegarder localement
     localStorage.setItem('premiumCode', code.toUpperCase().trim());
     localStorage.setItem('premiumExpiry', data.expiresAt);
     return { valid: true, expiry: data.expiresAt, label: data.label };
@@ -91,32 +88,36 @@ async function checkPremiumCode(code) {
 }
 
 async function checkSavedPremium() {
+  // Vérification locale d'abord — instantané, pas de latence Firebase
   const code = localStorage.getItem('premiumCode');
   const expiry = localStorage.getItem('premiumExpiry');
   if (!code || !expiry) return false;
+
   const exp = new Date(expiry);
   if (exp < new Date()) {
     localStorage.removeItem('premiumCode');
     localStorage.removeItem('premiumExpiry');
     return false;
   }
-  // Vérifier que le code existe encore et n'a pas été révoqué
-  try {
-    const ref = doc(db, 'premiumCodes', code);
-    const snap = await getDoc(ref);
-    if (!snap.exists() || snap.data().revoked) {
-      localStorage.removeItem('premiumCode');
-      localStorage.removeItem('premiumExpiry');
-      return false;
-    }
-  } catch {
-    // Firebase indispo ou erreur → on fait confiance au localStorage
-    isPremium = true;
-    premiumExpiry = expiry;
-    return true;
-  }
+
+  // localStorage valide → Premium actif immédiatement
   isPremium = true;
   premiumExpiry = expiry;
+
+  // Vérification Firebase en arrière-plan (non-bloquante)
+  // Si Firebase dit que le code est révoqué, on retire le premium
+  getDoc(doc(db, 'premiumCodes', code)).then(snap => {
+    if (snap.exists() && snap.data().revoked) {
+      isPremium = false;
+      premiumExpiry = null;
+      localStorage.removeItem('premiumCode');
+      localStorage.removeItem('premiumExpiry');
+      updatePremiumBadge();
+    }
+  }).catch(() => {
+    // Firebase indispo → on garde le premium local, pas de pénalité
+  });
+
   return true;
 }
 
@@ -187,6 +188,7 @@ function updatePremiumBadge() {
 // ── TABS ─────────────────────────────────────────────────────
 const tabPlaceholders = {
   yt: 'Colle ton lien YouTube ici…',
+  ig: 'Colle ton lien Instagram ici…',
   tt: 'Colle ton lien TikTok ici…'
 };
 
@@ -207,15 +209,6 @@ const tabFormats = {
 
 let currentTab = 'yt';
 
-function renderFormats(platform) {
-  const row = document.querySelector('.format-row');
-  if (!row) return;
-  const fmts = tabFormats[platform || currentTab] || tabFormats.yt;
-  row.innerHTML = fmts.map((f, i) =>
-    `<div class="fmt-chip${i === 0 ? ' selected' : ''}" data-fmt="${f.fmt}" data-q="${f.q}" onclick="selectFmt(this)">${f.label}</div>`
-  ).join('');
-}
-
 function switchTab(btn, platform) {
   currentTab = platform;
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -225,7 +218,6 @@ function switchTab(btn, platform) {
     input.value = '';
     input.placeholder = tabPlaceholders[platform] || '';
   }
-  renderFormats(platform);
   hideResult();
 }
 
@@ -259,12 +251,8 @@ async function analyze() {
   const url = document.getElementById('urlInput').value.trim();
   if (!url) { document.getElementById('urlInput').focus(); return; }
 
-  // Vérifier la limite
-  const { allowed, count } = await canDownload();
-  if (!allowed) {
-    showLimitModal();
-    return;
-  }
+  const { allowed } = await canDownload();
+  if (!allowed) { showLimitModal(); return; }
 
   hideResult();
   const loader = document.getElementById('loader');
@@ -308,8 +296,14 @@ async function handleDownload(e, encodedUrl, fmt, q) {
   await recordDownload();
   updatePremiumBadge();
 
-  const url = decodeURIComponent(encodedUrl);
-  window.location.href = `${BACKEND}/download?url=${encodedUrl}&format=${fmt}&quality=${q}`;
+  // Déclenche le téléchargement via un lien temporaire
+  const dlUrl = `${BACKEND}/download?url=${encodedUrl}&format=${fmt}&quality=${q}`;
+  const a = document.createElement('a');
+  a.href = dlUrl;
+  a.download = '';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
 }
 
 // ── LIMIT MODAL ───────────────────────────────────────────────
@@ -366,7 +360,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 });
 
-// Expose functions to global scope (used in HTML onclick)
+// Expose functions
 window.switchTab = switchTab;
 window.selectFmt = selectFmt;
 window.analyze = analyze;
@@ -376,4 +370,3 @@ window.closeLimitModal = closeLimitModal;
 window.openCodeModal = openCodeModal;
 window.closeCodeModal = closeCodeModal;
 window.activateCode = activateCode;
-window.renderFormats = renderFormats;
