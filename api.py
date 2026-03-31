@@ -174,24 +174,41 @@ def _rapi_download(url: str, platform: str, format_type: str):
                 if d.get("link"):
                     return _save_stream(d["link"], d.get("title", "audio"), ".mp3"), d.get("title", "audio"), False
         elif platform == "youtube":
+            vid = _extract_yt_id(url)
+            dl_url = None
+            title  = "video"
+            # Essai 1 : yt-api (meilleure qualité, formats muxés)
             r = httpx.get("https://yt-api.p.rapidapi.com/dl",
-                params={"id": _extract_yt_id(url), "cgeo": "US"},
+                params={"id": vid, "cgeo": "US"},
                 headers={"X-RapidAPI-Key": key, "X-RapidAPI-Host": "yt-api.p.rapidapi.com"}, timeout=30)
             if r.status_code == 200:
-                d = r.json()
-                formats = d.get("formats", []) + d.get("adaptiveFormats", [])
-                mp4s = [f for f in formats if f.get("mimeType", "").startswith("video/mp4") and f.get("url")]
+                d      = r.json()
+                title  = d.get("title", "video")
+                fmts   = d.get("formats", []) + d.get("adaptiveFormats", [])
+                # Priorité : MP4 muxé (audio + vidéo)
+                mp4s   = [f for f in fmts
+                          if f.get("mimeType", "").startswith("video/mp4")
+                          and f.get("url") and f.get("audioQuality")]
+                if not mp4s:
+                    mp4s = [f for f in fmts
+                            if f.get("mimeType", "").startswith("video/mp4") and f.get("url")]
                 if mp4s:
-                    best = sorted(mp4s, key=lambda x: x.get("height", 0), reverse=True)[0]
-                    return best["url"], d.get("title", "video"), True
-            r2 = httpx.get("https://youtube-mp36.p.rapidapi.com/dl",
-                params={"id": _extract_yt_id(url), "format": "mp4"},
-                headers={"X-RapidAPI-Key": key, "X-RapidAPI-Host": "youtube-mp36.p.rapidapi.com"}, timeout=30)
-            if r2.status_code == 200:
-                d2 = r2.json()
-                dl_url = d2.get("link") or d2.get("url")
-                if dl_url:
-                    return dl_url, d2.get("title", "video"), True
+                    best   = sorted(mp4s, key=lambda x: x.get("height", 0), reverse=True)[0]
+                    dl_url = best["url"]
+            # Essai 2 : fallback youtube-mp36 (MP3 uniquement, ne pas utiliser pour MP4)
+            if not dl_url and format_type == "mp3":
+                r2 = httpx.get("https://youtube-mp36.p.rapidapi.com/dl",
+                    params={"id": vid},
+                    headers={"X-RapidAPI-Key": key, "X-RapidAPI-Host": "youtube-mp36.p.rapidapi.com"}, timeout=30)
+                if r2.status_code == 200:
+                    d2 = r2.json()
+                    if d2.get("link"):
+                        dl_url = d2["link"]
+                        title  = d2.get("title", "audio")
+            # Télécharger sur disque → FileResponse (évite les 0 octets des URLs googlevideo IP-lockées)
+            if dl_url:
+                ext = ".mp3" if format_type == "mp3" else ".mp4"
+                return _save_stream(dl_url, title, ext), title, False
         elif platform == "tiktok":
             r = httpx.get("https://tiktok-scraper7.p.rapidapi.com/video/info",
                 params={"url": url, "hd": "1"},
