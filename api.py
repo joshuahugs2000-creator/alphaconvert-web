@@ -155,37 +155,43 @@ def _ytstream_download(url: str, fmt: str, quality: str):
         raise ValueError("Pas de clé RapidAPI")
 
     vid = _extract_yt_id(url)
-    q_map = {"1080": "1080", "720": "720", "480": "480", "360": "360"}
-    res = q_map.get(quality, "720")
-
-    if fmt == "mp3":
-        endpoint = "https://ytstream-download-youtube-videos.p.rapidapi.com/dl"
-        params   = {"id": vid}
-    else:
-        endpoint = "https://ytstream-download-youtube-videos.p.rapidapi.com/dl"
-        params   = {"id": vid}
-
     headers = {
         "X-RapidAPI-Key":  key,
         "X-RapidAPI-Host": "ytstream-download-youtube-videos.p.rapidapi.com"
     }
-    r = httpx.get(endpoint, params=params, headers=headers, timeout=30)
+    r = httpx.get("https://ytstream-download-youtube-videos.p.rapidapi.com/dl",
+                  params={"id": vid}, headers=headers, timeout=30)
     r.raise_for_status()
     data  = r.json()
     title = data.get("title", "video")
 
     if fmt == "mp3":
-        dl_url = data.get("a") or data.get("adaptiveFormats", [{}])[0].get("url")
+        af = data.get("adaptiveFormats", [])
+        audio_items = [f for f in af if "audio" in f.get("mimeType","").lower()]
+        dl_url = audio_items[0].get("url") if audio_items else None
         ext    = ".mp3"
     else:
-        # formats is a dict: {"720": url, "360": url, ...}
-        formats = data.get("formats") or {}
-        dl_url  = (formats.get(res)
-                   or formats.get("720")
-                   or formats.get("480")
-                   or formats.get("360"))
+        q_int = int(quality)
+        # formats est une LISTE [{quality:"720p", url:...}, ...]
+        formats = data.get("formats", [])
+        dl_url  = None
+        if isinstance(formats, list):
+            mp4s = []
+            for f in formats:
+                q_str = str(f.get("quality","")).replace("p","").replace("hd","").strip()
+                try:
+                    mp4s.append((int(q_str), f.get("url","")))
+                except ValueError:
+                    pass
+            mp4s.sort(key=lambda x: x[0], reverse=True)
+            dl_url = next((u for q, u in mp4s if q <= q_int and u), None)
+            if not dl_url and mp4s:
+                dl_url = mp4s[-1][1]
+        elif isinstance(formats, dict):
+            dl_url = (formats.get(quality) or formats.get("720")
+                      or formats.get("480") or formats.get("360"))
+        # Fallback adaptiveFormats video
         if not dl_url:
-            # adaptiveFormats fallback
             af = data.get("adaptiveFormats", [])
             vids = [f for f in af if f.get("mimeType","").startswith("video/mp4")]
             if vids:
@@ -193,7 +199,7 @@ def _ytstream_download(url: str, fmt: str, quality: str):
         ext = ".mp4"
 
     if not dl_url:
-        raise ValueError(f"YTStream: pas d'URL de téléchargement. data={list(data.keys())}")
+        raise ValueError(f"YTStream: pas d'URL. formats type={type(data.get('formats'))}")
 
     logger.info(f"YTStream OK title={title} ext={ext}")
     path = _save_stream(dl_url, title, ext)
@@ -231,13 +237,15 @@ def _ytmedia_download(url: str, fmt: str, quality: str):
     else:
         videos = data.get("videos", [])
         q_int  = int(quality)
-        # Trier par résolution décroissante, prendre la meilleure ≤ qualité demandée
-        mp4s = [v for v in videos if "mp4" in v.get("extension","").lower()
-                and v.get("width") and v.get("height")]
+        # Prendre toutes les vidéos avec URL (extension peut être absente)
+        all_vids = [v for v in videos if v.get("url")]
+        mp4s = [v for v in all_vids if "mp4" in str(v.get("extension","")).lower()]
+        if not mp4s:
+            mp4s = all_vids  # fallback: prendre tout
         mp4s.sort(key=lambda v: v.get("height", 0), reverse=True)
-        chosen = next((v for v in mp4s if v.get("height",0) <= q_int), None) or (mp4s[0] if mp4s else None)
+        chosen = next((v for v in mp4s if (v.get("height") or 0) <= q_int), None) or (mp4s[0] if mp4s else None)
         if not chosen:
-            raise ValueError("YTMedia: pas de vidéo MP4")
+            raise ValueError("YTMedia: pas de vidéo disponible")
         dl_url = chosen.get("url")
         ext    = ".mp4"
 
