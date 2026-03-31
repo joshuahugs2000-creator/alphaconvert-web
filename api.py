@@ -2,11 +2,10 @@ import os
 import logging
 import httpx
 import urllib.parse
-import asyncio
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import JSONResponse, StreamingResponse, Response
+from fastapi.responses import JSONResponse, StreamingResponse, Response, RedirectResponse
 from pydantic import BaseModel
 
 logging.basicConfig(level=logging.INFO, format="%(name)s:%(message)s")
@@ -20,7 +19,7 @@ app.add_middleware(
     allow_credentials=False,
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
-    expose_headers=["Content-Disposition", "Content-Length"],
+    expose_headers=["Content-Disposition", "Content-Length", "Content-Type"],
     max_age=86400,
 )
 
@@ -64,40 +63,75 @@ def detect_platform(url: str):
         return "tiktok"
     return "unknown"
 
-async def resolve_short_url(url: str) -> str:
-    if "vt.tiktok.com" in url or "vm.tiktok.com" in url:
-        try:
-            async with httpx.AsyncClient(timeout=10, follow_redirects=True) as c:
-                r = await c.get(url, headers={"User-Agent": "Mozilla/5.0"})
-                return str(r.url)
-        except Exception as e:
-            logger.warning(f"Short URL resolve failed: {e}")
+async def resolve_tiktok_url(url: str) -> str:
+    """Résout les liens courts TikTok avec plusieurs stratégies."""
+    if not ("vt.tiktok.com" in url or "vm.tiktok.com" in url):
+        return url
+    
+    # Stratégie 1 : suivre les redirects normalement
+    try:
+        async with httpx.AsyncClient(
+            timeout=15,
+            follow_redirects=True,
+            headers={
+                "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            }
+        ) as c:
+            r = await c.get(url)
+            resolved = str(r.url)
+            if "tiktok.com/@" in resolved or "/video/" in resolved:
+                logger.info(f"TikTok resolved: {resolved[:80]}")
+                return resolved
+    except Exception as e:
+        logger.warning(f"TikTok resolve strategy 1 failed: {e}")
+
+    # Stratégie 2 : HEAD request
+    try:
+        async with httpx.AsyncClient(timeout=10, follow_redirects=True) as c:
+            r = await c.head(url, headers={"User-Agent": "Mozilla/5.0"})
+            resolved = str(r.url)
+            if "tiktok.com" in resolved:
+                return resolved
+    except Exception as e:
+        logger.warning(f"TikTok resolve strategy 2 failed: {e}")
+
     return url
 
 def sanitize_filename(name: str) -> str:
     return "".join(c for c in name if c not in r'\/:*?"<>|').strip()[:80]
 
 def make_streaming_response(dl_url: str, filename: str, content_type: str, extra_headers: dict = {}):
-    """Crée un StreamingResponse qui télécharge depuis une URL distante."""
-
+    """
+    Stream propre : le client httpx est créé dans le générateur
+    pour rester vivant pendant toute la durée du transfert.
+    On utilise aussi un timeout très long (600s) pour les grosses vidéos.
+    """
     req_headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Accept": "*/*",
+        "Accept-Encoding": "identity",  # désactive gzip pour éviter décompression partielle
         **extra_headers
     }
 
     async def generator():
-        # Le client est créé DANS le générateur pour rester ouvert pendant tout le stream
-        async with httpx.AsyncClient(timeout=300, follow_redirects=True) as client:
+        async with httpx.AsyncClient(
+            timeout=httpx.Timeout(connect=15, read=600, write=60, pool=15),
+            follow_redirects=True
+        ) as client:
             async with client.stream("GET", dl_url, headers=req_headers) as response:
+                logger.info(f"Stream start: {response.status_code} {response.headers.get('content-length','?')} bytes")
                 async for chunk in response.aiter_bytes(65536):
                     yield chunk
+                logger.info("Stream complete")
 
+    safe_filename = filename.encode('ascii', errors='replace').decode('ascii')
     return StreamingResponse(
         generator(),
         media_type=content_type,
         headers={
-            "Content-Disposition": f'attachment; filename="{filename}"',
-            "Access-Control-Expose-Headers": "Content-Disposition",
+            "Content-Disposition": f'attachment; filename="{safe_filename}"',
+            "Cache-Control": "no-cache",
         }
     )
 
@@ -147,7 +181,8 @@ async def get_info(url: str):
                     }
 
             elif platform == "tiktok":
-                resolved = await resolve_short_url(url)
+                resolved = await resolve_tiktok_url(url)
+                logger.info(f"TikTok info URL: {resolved[:80]}")
                 r = await client.get(
                     "https://tiktok-scraper7.p.rapidapi.com/video/info",
                     params={"url": resolved, "hd": "1"},
@@ -163,7 +198,7 @@ async def get_info(url: str):
                         "platform": "tiktok"
                     }
                 else:
-                    logger.error(f"TikTok /info {r.status_code}: {r.text[:200]}")
+                    logger.error(f"TikTok /info {r.status_code}: {r.text[:300]}")
 
         except Exception as e:
             logger.error(f"Info error [{platform}]: {e}")
@@ -225,11 +260,11 @@ async def download(url: str, format: str = "mp4", quality: str = "720"):
                             best = sorted(mp4s, key=lambda x: x.get("height", 0), reverse=True)[0]
                             dl_url = best["url"]
                             title = sanitize_filename(d.get("title", "video"))
-                            logger.info(f"YT MP4 stream: {best.get('height')}p")
+                            logger.info(f"YT MP4: {best.get('height')}p")
                             return make_streaming_response(dl_url, f"{title}.mp4", "video/mp4")
 
                     # Fallback youtube-mp36
-                    logger.warning("yt-api MP4 failed, fallback youtube-mp36")
+                    logger.warning("yt-api failed, fallback youtube-mp36")
                     r2 = await client.get(
                         "https://youtube-mp36.p.rapidapi.com/dl",
                         params={"id": vid},
@@ -243,7 +278,8 @@ async def download(url: str, format: str = "mp4", quality: str = "720"):
                             return make_streaming_response(link, f"{title}.mp4", "video/mp4")
 
             elif platform == "tiktok":
-                resolved = await resolve_short_url(url)
+                resolved = await resolve_tiktok_url(url)
+                logger.info(f"TikTok download URL: {resolved[:80]}")
                 r = await client.get(
                     "https://tiktok-scraper7.p.rapidapi.com/video/info",
                     params={"url": resolved, "hd": "1"},
@@ -263,10 +299,13 @@ async def download(url: str, format: str = "mp4", quality: str = "720"):
                     if dl_url:
                         return make_streaming_response(
                             dl_url, f"{title}.{ext}", ctype,
-                            extra_headers={"Referer": "https://www.tiktok.com/"}
+                            extra_headers={
+                                "Referer": "https://www.tiktok.com/",
+                                "Origin": "https://www.tiktok.com"
+                            }
                         )
                 else:
-                    logger.error(f"TikTok download {r.status_code}: {r.text[:200]}")
+                    logger.error(f"TikTok download {r.status_code}: {r.text[:300]}")
 
         except Exception as e:
             logger.error(f"Download error [{platform}]: {e}")
