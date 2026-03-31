@@ -89,12 +89,16 @@ def sanitize(name: str) -> str:
 def stream_response(dl_url: str, filename: str, mime: str, req_headers: dict = {}):
     """
     Crée un StreamingResponse correct.
-    Le client httpx EST CRÉÉ dans le générateur — il reste ouvert
-    pendant tout le transfert. C'est la clé pour éviter les 0 octets.
+    FIX 1 : Range: bytes=0-  → les CDN vidéo (googlevideo, tiktok) renvoient
+             un corps vide sans ce header.
+    FIX 2 : Vérification du status HTTP dans le générateur → évite les
+             fichiers 0 octet silencieux quand le CDN répond 403/416.
     """
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "User-Agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Accept":          "*/*",
         "Accept-Encoding": "identity",   # pas de gzip → taille exacte
+        "Range":           "bytes=0-",   # ← FIX 1 : indispensable pour googlevideo & co.
         **req_headers
     }
     safe = filename.encode("ascii", errors="replace").decode("ascii")
@@ -104,7 +108,14 @@ def stream_response(dl_url: str, filename: str, mime: str, req_headers: dict = {
         t = httpx.Timeout(connect=15, read=600, write=60, pool=15)
         async with httpx.AsyncClient(timeout=t, follow_redirects=True) as client:
             async with client.stream("GET", dl_url, headers=headers) as resp:
-                logger.info(f"Streaming {resp.status_code} — {resp.headers.get('content-length','?')}B — {filename}")
+                logger.info(
+                    f"CDN {resp.status_code} — "
+                    f"{resp.headers.get('content-length', '?')}B — {filename}"
+                )
+                # FIX 2 : ne pas yielder si le CDN refuse
+                if resp.status_code not in (200, 206):
+                    logger.error(f"CDN refused {resp.status_code} → {dl_url[:100]}")
+                    return
                 async for chunk in resp.aiter_bytes(65536):
                     yield chunk
 
@@ -125,7 +136,7 @@ def health():
 @app.options("/chat")
 async def preflight():
     return Response(status_code=200, headers={
-        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Origin":  "*",
         "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
         "Access-Control-Allow-Headers": "*",
     })
@@ -164,15 +175,30 @@ async def get_info(url: str):
                     params={"url": resolved, "hd": "1"},
                     headers={"X-RapidAPI-Key": api_key, "X-RapidAPI-Host": "tiktok-scraper7.p.rapidapi.com"}
                 )
+                logger.info(f"TikTok /info HTTP {r.status_code}")
+
                 if r.status_code == 200:
-                    d = r.json().get("data", {})
-                    return {
-                        "title":     d.get("title", "TikTok"),
-                        "duration":  int(d.get("duration", 0) or 0),
-                        "thumbnail": d.get("cover") or d.get("origin_cover", ""),
-                        "platform":  "tiktok"
-                    }
-                logger.error(f"TikTok info {r.status_code}: {r.text[:200]}")
+                    body     = r.json()
+                    # FIX 3 : vérifier le code métier de l'API, pas seulement HTTP 200
+                    api_code = body.get("code", 0)
+                    if api_code != 0:
+                        logger.error(
+                            f"TikTok API code {api_code}: {body.get('msg', '')} | "
+                            f"url={resolved[:80]}"
+                        )
+                    else:
+                        # FIX 4 : certaines versions mettent data à la racine du JSON
+                        d = body.get("data") or body
+                        if isinstance(d, dict) and (d.get("title") or d.get("id")):
+                            return {
+                                "title":     d.get("title") or d.get("desc", "TikTok"),
+                                "duration":  int(d.get("duration", 0) or 0),
+                                "thumbnail": d.get("cover") or d.get("origin_cover", ""),
+                                "platform":  "tiktok"
+                            }
+                        logger.error(f"TikTok data vide/inattendu: {str(body)[:200]}")
+                else:
+                    logger.error(f"TikTok info HTTP {r.status_code}: {r.text[:200]}")
 
         except Exception as e:
             logger.error(f"Info [{platform}]: {e}")
@@ -203,50 +229,61 @@ async def download(url: str, format: str = "mp4", quality: str = "720"):
                     if r.status_code == 200:
                         d = r.json()
                         if d.get("link"):
-                            return stream_response(d["link"], f"{sanitize(d.get('title','audio'))}.mp3", "audio/mpeg")
+                            return stream_response(
+                                d["link"],
+                                f"{sanitize(d.get('title', 'audio'))}.mp3",
+                                "audio/mpeg"
+                            )
 
                 else:  # MP4
-                    # Essai 1 : yt-api (meilleure qualité)
                     r = await client.get(
                         "https://yt-api.p.rapidapi.com/dl",
                         params={"id": vid, "cgeo": "US"},
                         headers={"X-RapidAPI-Key": api_key, "X-RapidAPI-Host": "yt-api.p.rapidapi.com"}
                     )
+                    logger.info(f"yt-api HTTP {r.status_code}")
+
                     if r.status_code == 200:
-                        d = r.json()
+                        d       = r.json()
                         all_fmt = d.get("formats", []) + d.get("adaptiveFormats", [])
                         target  = int(quality)
-                        # Priorité : MP4 avec audio intégré
+
+                        # Priorité : MP4 muxé (audio + vidéo dans le même flux)
                         candidates = [
                             f for f in all_fmt
                             if f.get("mimeType", "").startswith("video/mp4")
                             and f.get("url") and f.get("audioQuality")
                             and f.get("height", 0) <= target
                         ]
+                        # Fallback : n'importe quel MP4 sous la qualité demandée
                         if not candidates:
                             candidates = [
                                 f for f in all_fmt
                                 if f.get("mimeType", "").startswith("video/mp4")
                                 and f.get("url") and f.get("height", 0) <= target
                             ]
+
                         if candidates:
-                            best = max(candidates, key=lambda x: x.get("height", 0))
+                            best  = max(candidates, key=lambda x: x.get("height", 0))
                             title = sanitize(d.get("title", "video"))
                             logger.info(f"YT MP4 {best.get('height')}p → stream")
-                            return stream_response(best["url"], f"{title}.mp4", "video/mp4")
+                            # FIX 5 : Referer requis par le CDN googlevideo.com
+                            return stream_response(
+                                best["url"],
+                                f"{title}.mp4",
+                                "video/mp4",
+                                req_headers={
+                                    "Referer": "https://www.youtube.com/",
+                                    "Origin":  "https://www.youtube.com",
+                                }
+                            )
+                        else:
+                            logger.warning(f"yt-api: aucun format MP4 trouvé pour {vid}")
+                    else:
+                        logger.warning(f"yt-api HTTP {r.status_code}: {r.text[:200]}")
 
-                    # Essai 2 : fallback youtube-mp36
-                    logger.warning("yt-api failed, trying youtube-mp36 fallback")
-                    r2 = await client.get(
-                        "https://youtube-mp36.p.rapidapi.com/dl",
-                        params={"id": vid},
-                        headers={"X-RapidAPI-Key": api_key, "X-RapidAPI-Host": "youtube-mp36.p.rapidapi.com"}
-                    )
-                    if r2.status_code == 200:
-                        d2 = r2.json()
-                        if d2.get("link"):
-                            title = sanitize(d2.get("title", "video"))
-                            return stream_response(d2["link"], f"{title}.mp4", "video/mp4")
+                    # FIX 6 : le fallback youtube-mp36 EST SUPPRIMÉ pour MP4
+                    # Cette API ne fournit que des liens MP3 → servis en .mp4 = fichier 0 octet / corrompu
 
             # ── TIKTOK ─────────────────────────────────────────
             elif platform == "tiktok":
@@ -256,23 +293,53 @@ async def download(url: str, format: str = "mp4", quality: str = "720"):
                     params={"url": resolved, "hd": "1"},
                     headers={"X-RapidAPI-Key": api_key, "X-RapidAPI-Host": "tiktok-scraper7.p.rapidapi.com"}
                 )
-                if r.status_code == 200:
-                    d     = r.json().get("data", {})
-                    title = sanitize(d.get("title", "tiktok"))
-                    if format == "mp3":
-                        dl_url = (d.get("music_info") or {}).get("play") or d.get("wmplay") or d.get("play")
-                        mime, ext = "audio/mpeg", "mp3"
-                    else:
-                        dl_url = d.get("hdplay") or d.get("play") or d.get("wmplay")
-                        mime, ext = "video/mp4", "mp4"
+                logger.info(f"TikTok /download HTTP {r.status_code}")
 
-                    if dl_url:
-                        return stream_response(
-                            dl_url, f"{title}.{ext}", mime,
-                            req_headers={"Referer": "https://www.tiktok.com/", "Origin": "https://www.tiktok.com"}
+                if r.status_code == 200:
+                    body     = r.json()
+                    # FIX 7 : même vérification du code métier que /info
+                    api_code = body.get("code", 0)
+                    if api_code != 0:
+                        logger.error(
+                            f"TikTok DL API code {api_code}: {body.get('msg', '')} | "
+                            f"url={resolved[:80]}"
                         )
+                    else:
+                        # FIX 8 : gestion structure data imbriquée ou à la racine
+                        d     = body.get("data") or body
+                        title = sanitize(d.get("title") or d.get("desc") or "tiktok")
+
+                        if format == "mp3":
+                            dl_url = (
+                                (d.get("music_info") or {}).get("play")
+                                or d.get("wmplay")
+                                or d.get("play")
+                            )
+                            mime, ext = "audio/mpeg", "mp3"
+                        else:
+                            dl_url = (
+                                d.get("hdplay")
+                                or d.get("play")
+                                or d.get("wmplay")
+                            )
+                            mime, ext = "video/mp4", "mp4"
+
+                        if dl_url:
+                            return stream_response(
+                                dl_url,
+                                f"{title}.{ext}",
+                                mime,
+                                req_headers={
+                                    "Referer": "https://www.tiktok.com/",
+                                    "Origin":  "https://www.tiktok.com",
+                                }
+                            )
+                        else:
+                            logger.error(
+                                f"TikTok: aucun dl_url dans data={str(d)[:200]}"
+                            )
                 else:
-                    logger.error(f"TikTok download {r.status_code}: {r.text[:200]}")
+                    logger.error(f"TikTok download HTTP {r.status_code}: {r.text[:200]}")
 
         except Exception as e:
             logger.error(f"Download [{platform}]: {e}")
