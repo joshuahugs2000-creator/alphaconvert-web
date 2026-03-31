@@ -310,74 +310,75 @@ def _youtube_rapidapi_info(url: str) -> dict | None:
     return None
 
 
-INVIDIOUS_INSTANCES = [
-    "https://invidious.privacydev.net",
-    "https://inv.tux.pizza",
-    "https://invidious.nerdvpn.de",
-    "https://yt.cdaut.de",
+# ── COBALT.TOOLS — API publique gratuite, sans clé ────────────────────────────
+# cobalt fait le téléchargement sur SES serveurs → pas d'IP-lock YouTube
+COBALT_INSTANCES = [
+    "https://cobalt.api.lostless.de",
+    "https://co.wuk.sh",
+    "https://cobalt-api.kwiatekmiki.com",
 ]
 
-def _youtube_invidious_download(url: str, fmt: str, quality: str) -> tuple:
+def _youtube_cobalt_download(url: str, fmt: str, quality: str) -> tuple:
     """
-    Fallback gratuit via Invidious (pas de clé API requise).
-    Invidious est un front-end YouTube open-source qui expose une API publique.
+    Télécharge via cobalt.tools (API publique, gratuite, sans clé).
+    cobalt gère le download sur ses propres serveurs → bypass IP-lock Railway.
     """
     vid = _extract_yt_id(url)
-    if not vid:
-        return None, None
+    q_map = {"1080": "1080", "720": "720", "480": "480", "360": "360"}
+    vq = q_map.get(quality, "720")
 
-    target_h = int(quality)
+    payload = {
+        "url":       f"https://www.youtube.com/watch?v={vid}",
+        "vCodec":    "h264",
+        "vQuality":  vq,
+        "aFormat":   "mp3" if fmt == "mp3" else "best",
+        "isAudioOnly": fmt == "mp3",
+    }
+    headers = {
+        "Accept":       "application/json",
+        "Content-Type": "application/json",
+        "User-Agent":   "Mozilla/5.0",
+    }
 
-    for instance in INVIDIOUS_INSTANCES:
+    for instance in COBALT_INSTANCES:
         try:
-            r = httpx.get(
-                f"{instance}/api/v1/videos/{vid}",
-                timeout=15,
-                headers={"User-Agent": "Mozilla/5.0"},
+            r = httpx.post(
+                f"{instance}/api/json",
+                json=payload,
+                headers=headers,
+                timeout=20,
             )
+            logger.info(f"cobalt {instance} → HTTP {r.status_code}")
             if r.status_code != 200:
                 continue
             data = r.json()
-            title = data.get("title", "video")
+            status = data.get("status")
 
-            if fmt == "mp3":
-                # Prendre le meilleur audio
-                audios = [
-                    f for f in data.get("adaptiveFormats", [])
-                    if f.get("type", "").startswith("audio/mp4")
-                    and f.get("url")
-                ]
-                if not audios:
-                    audios = [f for f in data.get("adaptiveFormats", [])
-                              if "audio" in f.get("type", "") and f.get("url")]
-                if audios:
-                    best = sorted(audios, key=lambda x: x.get("bitrate", 0), reverse=True)[0]
-                    path = _save_stream(best["url"], title, ".mp3")
-                    return path, title
-            else:
-                # MP4 : formats progressifs (vidéo + audio muxés)
-                mp4s = [
-                    f for f in data.get("formatStreams", [])
-                    if "video/mp4" in f.get("type", "")
-                    and f.get("url")
-                    and f.get("resolution", "").replace("p", "").isdigit()
-                    and int(f["resolution"].replace("p", "")) <= target_h
-                ]
-                if not mp4s:
-                    mp4s = [f for f in data.get("formatStreams", [])
-                            if "video/mp4" in f.get("type", "") and f.get("url")]
-                if mp4s:
-                    best = sorted(
-                        mp4s,
-                        key=lambda x: int(x.get("resolution", "0p").replace("p", "") or 0),
-                        reverse=True
-                    )[0]
-                    path = _save_stream(best["url"], title, ".mp4")
-                    return path, title
+            if status == "stream" and data.get("url"):
+                dl_url = data["url"]
+                ext    = ".mp3" if fmt == "mp3" else ".mp4"
+                title  = data.get("filename", "video").replace(ext, "")
+                path   = _save_stream(dl_url, title, ext)
+                return path, title
 
-            logger.warning(f"Invidious {instance}: aucun format trouvé pour {vid}")
+            if status == "redirect" and data.get("url"):
+                dl_url = data["url"]
+                ext    = ".mp3" if fmt == "mp3" else ".mp4"
+                title  = "video"
+                path   = _save_stream(dl_url, title, ext)
+                return path, title
+
+            if status == "tunnel" and data.get("url"):
+                dl_url = data["url"]
+                ext    = ".mp3" if fmt == "mp3" else ".mp4"
+                title  = data.get("filename", "video").replace(ext, "")
+                path   = _save_stream(dl_url, title, ext)
+                return path, title
+
+            logger.warning(f"cobalt {instance} status={status}: {data}")
+
         except Exception as e:
-            logger.warning(f"Invidious {instance} failed: {e}")
+            logger.warning(f"cobalt {instance} failed: {e}")
             continue
 
     return None, None
@@ -637,13 +638,14 @@ async def download(url: str, format: str = "mp4", quality: str = "720"):
 
     # Fallback RapidAPI selon la plateforme
     if platform == "youtube":
-        # Essai 2 : RapidAPI
-        path, title = _youtube_rapidapi_download(url, format, quality)
+        # Essai 2 : cobalt.tools (API publique, pas d'IP-lock, sans clé)
+        logger.info("yt-dlp failed → trying cobalt.tools")
+        path, title = _youtube_cobalt_download(url, format, quality)
         if path and os.path.exists(path):
             return _serve(path, title)
-        # Essai 3 : Invidious (gratuit, sans clé)
-        logger.info("RapidAPI failed → trying Invidious fallback")
-        path, title = _youtube_invidious_download(url, format, quality)
+        # Essai 3 : RapidAPI (yt-api + mp36)
+        logger.info("cobalt failed → trying RapidAPI")
+        path, title = _youtube_rapidapi_download(url, format, quality)
         if path and os.path.exists(path):
             return _serve(path, title)
 
