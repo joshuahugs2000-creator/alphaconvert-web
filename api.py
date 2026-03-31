@@ -248,6 +248,118 @@ def _tiktok_rapidapi(url: str, fmt: str):
     return None, "tiktok"
 
 
+def _youtube_rapidapi_info(url: str) -> dict | None:
+    """
+    Récupère les infos d'une vidéo YouTube via RapidAPI (YouTube v3).
+    Utilisé en fallback quand yt-dlp est bloqué.
+    Variable d'env requise : RAPIDAPI_KEYS
+    API utilisée : youtube-media-downloader.p.rapidapi.com
+    """
+    key = _get_rapidapi_key()
+    if not key:
+        return None
+    vid = _extract_yt_id(url)
+    if not vid:
+        return None
+    try:
+        r = httpx.get(
+            "https://youtube-media-downloader.p.rapidapi.com/v2/video/details",
+            params={"videoId": vid},
+            headers={
+                "X-RapidAPI-Key":  key,
+                "X-RapidAPI-Host": "youtube-media-downloader.p.rapidapi.com",
+            },
+            timeout=20,
+        )
+        if r.status_code == 200:
+            d = r.json()
+            if not d.get("status"):
+                return None
+            thumb_url = ""
+            thumbnails = d.get("thumbnails", [])
+            if thumbnails:
+                # Prend la meilleure qualité
+                thumb_url = thumbnails[-1].get("url", "") or thumbnails[0].get("url", "")
+            if not thumb_url:
+                thumb_url = f"https://img.youtube.com/vi/{vid}/hqdefault.jpg"
+            # Proxyfie la miniature
+            if "ytimg.com" in thumb_url or "youtube.com" in thumb_url:
+                thumb_proxied = f"/thumbnail-proxy?url={urllib.parse.quote(thumb_url)}"
+            else:
+                thumb_proxied = thumb_url
+            return {
+                "title":     d.get("title", "YouTube Video"),
+                "duration":  d.get("lengthSeconds", 0),
+                "thumbnail": thumb_proxied,
+                "uploader":  d.get("author", {}).get("title", "YouTube") if isinstance(d.get("author"), dict) else d.get("author", "YouTube"),
+                "platform":  "youtube",
+                "_rapidapi_data": d,   # gardé pour le download
+            }
+    except Exception as e:
+        logger.error(f"YouTube RapidAPI info: {e}")
+    return None
+
+
+def _youtube_rapidapi_download(url: str, fmt: str, quality: str) -> tuple:
+    """
+    Télécharge une vidéo YouTube via RapidAPI.
+    Retourne (path, title) ou (None, None).
+    """
+    key = _get_rapidapi_key()
+    if not key:
+        return None, None
+    vid = _extract_yt_id(url)
+    if not vid:
+        return None, None
+    try:
+        r = httpx.get(
+            "https://youtube-media-downloader.p.rapidapi.com/v2/video/details",
+            params={"videoId": vid},
+            headers={
+                "X-RapidAPI-Key":  key,
+                "X-RapidAPI-Host": "youtube-media-downloader.p.rapidapi.com",
+            },
+            timeout=20,
+        )
+        if r.status_code != 200:
+            return None, None
+        d = r.json()
+        if not d.get("status"):
+            return None, None
+        title = d.get("title", "video")
+
+        if fmt == "mp3":
+            # Audio uniquement
+            audios = d.get("audios", [])
+            dl_url = audios[0].get("url") if audios else None
+            ext = ".mp3"
+        else:
+            # Vidéo MP4 — cherche la qualité demandée
+            videos = d.get("videos", [])
+            target_h = int(quality)
+            # Trie par hauteur décroissante, prend la première <= target
+            candidates = [
+                v for v in videos
+                if v.get("extension") == "mp4" and v.get("height", 0) <= target_h
+            ]
+            if not candidates:
+                candidates = [v for v in videos if v.get("extension") == "mp4"]
+            if not candidates:
+                candidates = videos  # dernier recours
+            # Prend la meilleure qualité disponible <= target
+            best = max(candidates, key=lambda v: v.get("height", 0)) if candidates else None
+            dl_url = best.get("url") if best else None
+            ext = ".mp4"
+
+        if dl_url:
+            logger.info(f"YouTube RapidAPI download: {title} ({fmt} {quality}p)")
+            path = _save_stream(dl_url, title, ext)
+            return path, title
+    except Exception as e:
+        logger.error(f"YouTube RapidAPI download: {e}")
+    return None, None
+
+
 # ── THUMBNAIL PROXY ───────────────────────────────────────────────────────────
 @app.get("/thumbnail-proxy")
 async def thumbnail_proxy(url: str):
@@ -335,8 +447,14 @@ async def get_info(url: str):
     finally:
         _restore_proxy_env(saved)
 
-    # Fallback YouTube sans yt-dlp
+    # Fallback YouTube : essaie RapidAPI d'abord, puis miniature statique
     if platform == "youtube":
+        rapi_info = _youtube_rapidapi_info(url)
+        if rapi_info:
+            # Retire la clé interne avant de retourner
+            rapi_info.pop("_rapidapi_data", None)
+            return rapi_info
+        # Dernier recours : miniature statique uniquement
         vid = _extract_yt_id(url)
         raw_thumb = f"https://img.youtube.com/vi/{vid}/hqdefault.jpg" if vid else ""
         thumb_proxied = f"/thumbnail-proxy?url={urllib.parse.quote(raw_thumb)}" if raw_thumb else ""
@@ -418,7 +536,12 @@ async def download(url: str, format: str = "mp4", quality: str = "720"):
             return _serve(path, info.get("title", "video"))
         logger.warning(f"yt-dlp succeeded but file not found uid={uid}")
 
-    # Fallback TikTok uniquement
+    # Fallback RapidAPI selon la plateforme
+    if platform == "youtube":
+        path, title = _youtube_rapidapi_download(url, format, quality)
+        if path and os.path.exists(path):
+            return _serve(path, title)
+
     if platform == "tiktok":
         path, title = _tiktok_rapidapi(url, format)
         if path and os.path.exists(path):
