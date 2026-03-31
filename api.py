@@ -278,19 +278,46 @@ async def download(url: str, format: str = "mp4", quality: str = "720"):
         "noplaylist":        True,
     }
 
+    # Détecte ffmpeg pour le merge vidéo+audio
+    import shutil as _shutil
+    ffmpeg_loc = _shutil.which("ffmpeg") or "/usr/bin/ffmpeg"
+    has_ffmpeg = os.path.exists(ffmpeg_loc)
+    logger.info(f"ffmpeg: {ffmpeg_loc} (exists={has_ffmpeg})")
+
     if format == "mp3":
-        # MP3 : pas de ffmpeg nécessaire, on prend m4a directement
-        opts = {**base_opts, "format": "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio"}
+        if has_ffmpeg:
+            # Meilleure qualité audio + conversion MP3 via ffmpeg
+            opts = {**base_opts,
+                    "format": "bestaudio/best",
+                    "ffmpeg_location": ffmpeg_loc,
+                    "postprocessors": [{"key": "FFmpegExtractAudio",
+                                        "preferredcodec": "mp3",
+                                        "preferredquality": "192"}]}
+        else:
+            # Sans ffmpeg : m4a direct
+            opts = {**base_opts, "format": "bestaudio[ext=m4a]/bestaudio"}
     else:
-        # MP4 : UNIQUEMENT des formats qui ont vidéo+audio intégrés (pas de merge ffmpeg)
-        # YouTube propose des formats "progressive" (vidéo+audio) jusqu'à 720p max
-        qmap = {
-            "1080": "best[height<=1080][ext=mp4][vcodec!=none][acodec!=none]/best[height<=1080][ext=mp4]/best[height<=720][ext=mp4]",
-            "720":  "best[height<=720][ext=mp4][vcodec!=none][acodec!=none]/best[height<=720][ext=mp4]/best[height<=480][ext=mp4]",
-            "480":  "best[height<=480][ext=mp4][vcodec!=none][acodec!=none]/best[height<=480][ext=mp4]/best[height<=360][ext=mp4]",
-            "360":  "best[height<=360][ext=mp4][vcodec!=none][acodec!=none]/best[height<=360][ext=mp4]/best[ext=mp4]",
-        }
-        opts = {**base_opts, "format": qmap[quality]}
+        if has_ffmpeg:
+            # Avec ffmpeg : vidéo HD + audio séparés mergés en MP4
+            qmap = {
+                "1080": "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=1080]+bestaudio/best[height<=1080]",
+                "720":  "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=720]+bestaudio/best[height<=720]",
+                "480":  "bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=480]+bestaudio/best[height<=480]",
+                "360":  "bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=360]+bestaudio/best[height<=360]",
+            }
+            opts = {**base_opts,
+                    "format": qmap[quality],
+                    "ffmpeg_location": ffmpeg_loc,
+                    "merge_output_format": "mp4"}
+        else:
+            # Sans ffmpeg : format progressif uniquement (vidéo+audio dans 1 fichier, max 720p)
+            qmap = {
+                "1080": "best[height<=720][ext=mp4]/best[ext=mp4]/best",
+                "720":  "best[height<=720][ext=mp4]/best[ext=mp4]/best",
+                "480":  "best[height<=480][ext=mp4]/best[ext=mp4]/best",
+                "360":  "best[height<=360][ext=mp4]/best[ext=mp4]/best",
+            }
+            opts = {**base_opts, "format": qmap[quality]}
 
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:
