@@ -279,18 +279,18 @@ async def download(url: str, format: str = "mp4", quality: str = "720"):
     }
 
     if format == "mp3":
-        opts = {**base_opts,
-                "format": "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio",
-                "postprocessors": [{"key": "FFmpegExtractAudio",
-                                    "preferredcodec": "mp3", "preferredquality": "192"}]}
+        # MP3 : pas de ffmpeg nécessaire, on prend m4a directement
+        opts = {**base_opts, "format": "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio"}
     else:
+        # MP4 : UNIQUEMENT des formats qui ont vidéo+audio intégrés (pas de merge ffmpeg)
+        # YouTube propose des formats "progressive" (vidéo+audio) jusqu'à 720p max
         qmap = {
-            "1080": "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]/best[height<=1080]/best",
-            "720":  "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]/best[height<=720]/best",
-            "480":  "bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[height<=480][ext=mp4]/best[height<=480]/best",
-            "360":  "bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/best[height<=360][ext=mp4]/best[height<=360]/best",
+            "1080": "best[height<=1080][ext=mp4][vcodec!=none][acodec!=none]/best[height<=1080][ext=mp4]/best[height<=720][ext=mp4]",
+            "720":  "best[height<=720][ext=mp4][vcodec!=none][acodec!=none]/best[height<=720][ext=mp4]/best[height<=480][ext=mp4]",
+            "480":  "best[height<=480][ext=mp4][vcodec!=none][acodec!=none]/best[height<=480][ext=mp4]/best[height<=360][ext=mp4]",
+            "360":  "best[height<=360][ext=mp4][vcodec!=none][acodec!=none]/best[height<=360][ext=mp4]/best[ext=mp4]",
         }
-        opts = {**base_opts, "format": qmap[quality], "merge_output_format": "mp4"}
+        opts = {**base_opts, "format": qmap[quality]}
 
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:
