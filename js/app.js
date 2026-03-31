@@ -351,6 +351,10 @@ async function activateCode() {
 // ── INIT ──────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
   await checkSavedPremium();
+  // Si premium actif, on efface le compteur local pour éviter tout blocage résiduel
+  if (isPremium) {
+    localStorage.removeItem('dlCount');
+  }
   updatePremiumBadge();
 
   document.getElementById('urlInput').addEventListener('keydown', e => {
