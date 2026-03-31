@@ -7,7 +7,7 @@ const DAILY_LIMIT = 3;
 
 // ── FIREBASE ─────────────────────────────────────────────────
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, doc, getDoc, setDoc, updateDoc, increment }
+import { getFirestore, doc, getDoc, setDoc, updateDoc, increment, collection }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -65,23 +65,8 @@ function todayKey() {
 }
 
 // ── PREMIUM ───────────────────────────────────────────────────
-// Vérification SYNCHRONE dès le chargement du script — avant tout le reste
 let isPremium = false;
 let premiumExpiry = null;
-
-(function checkPremiumSync() {
-  const code = localStorage.getItem('premiumCode');
-  const expiry = localStorage.getItem('premiumExpiry');
-  if (!code || !expiry) return;
-  const exp = new Date(expiry);
-  if (exp < new Date()) {
-    localStorage.removeItem('premiumCode');
-    localStorage.removeItem('premiumExpiry');
-    return;
-  }
-  isPremium = true;
-  premiumExpiry = expiry;
-})();
 
 async function checkPremiumCode(code) {
   try {
@@ -103,58 +88,74 @@ async function checkPremiumCode(code) {
 }
 
 async function checkSavedPremium() {
-  // isPremium est déjà positionné de manière synchrone au chargement du script.
-  // Cette fonction fait juste la vérification Firebase en arrière-plan
-  // pour détecter si un code a été révoqué.
   const code = localStorage.getItem('premiumCode');
-  if (!code || !isPremium) return isPremium;
-
-  getDoc(doc(db, 'premiumCodes', code)).then(snap => {
-    if (snap.exists() && snap.data().revoked) {
-      isPremium = false;
-      premiumExpiry = null;
+  const expiry = localStorage.getItem('premiumExpiry');
+  if (!code || !expiry) return false;
+  const exp = new Date(expiry);
+  if (exp < new Date()) {
+    localStorage.removeItem('premiumCode');
+    localStorage.removeItem('premiumExpiry');
+    return false;
+  }
+  // FIX : si Firebase échoue ou est lent → on fait confiance au localStorage
+  try {
+    const ref = doc(db, 'premiumCodes', code);
+    const snap = await getDoc(ref);
+    if (!snap.exists() || snap.data().revoked) {
       localStorage.removeItem('premiumCode');
       localStorage.removeItem('premiumExpiry');
-      updatePremiumBadge();
+      return false;
     }
-  }).catch(() => {
-    // Firebase indispo → on garde le premium local
-  });
-
-  return isPremium;
+  } catch {
+    // Firebase indispo → on fait confiance au localStorage, pas de blocage
+    isPremium = true;
+    premiumExpiry = expiry;
+    return true;
+  }
+  isPremium = true;
+  premiumExpiry = expiry;
+  return true;
 }
 
 // ── DOWNLOAD LIMIT ────────────────────────────────────────────
 async function canDownload() {
   if (isPremium) return { allowed: true };
+  const cid = await getClientId();
   const today = todayKey();
-  const stored = JSON.parse(localStorage.getItem('dlCount') || '{}');
-  const count = (stored.date === today) ? (stored.count || 0) : 0;
-  if (count >= DAILY_LIMIT) return { allowed: false, count };
-  return { allowed: true, count };
+  const ref = doc(db, 'limits', `${cid}_${today}`);
+  try {
+    const snap = await getDoc(ref);
+    if (!snap.exists()) return { allowed: true, count: 0 };
+    const count = snap.data().count || 0;
+    if (count >= DAILY_LIMIT) return { allowed: false, count };
+    return { allowed: true, count };
+  } catch { return { allowed: true, count: 0 }; }
 }
 
 async function recordDownload() {
   if (isPremium) return;
+  const cid = await getClientId();
   const today = todayKey();
-  const stored = JSON.parse(localStorage.getItem('dlCount') || '{}');
-  const count = (stored.date === today) ? (stored.count || 0) : 0;
-  localStorage.setItem('dlCount', JSON.stringify({ date: today, count: count + 1 }));
-  // Firebase en arrière-plan pour anti-abus multi-navigateurs
-  getClientId().then(cid => {
-    const ref = doc(db, 'limits', `${cid}_${today}`);
-    getDoc(ref).then(snap => {
-      if (!snap.exists()) setDoc(ref, { count: count + 1, clientId: cid, date: today });
-      else updateDoc(ref, { count: increment(1) });
-    }).catch(() => {});
-  }).catch(() => {});
+  const ref = doc(db, 'limits', `${cid}_${today}`);
+  try {
+    const snap = await getDoc(ref);
+    if (!snap.exists()) {
+      await setDoc(ref, { count: 1, clientId: cid, date: today });
+    } else {
+      await updateDoc(ref, { count: increment(1) });
+    }
+  } catch {}
 }
 
-function getDownloadCount() {
+async function getDownloadCount() {
   if (isPremium) return 0;
+  const cid = await getClientId();
   const today = todayKey();
-  const stored = JSON.parse(localStorage.getItem('dlCount') || '{}');
-  return (stored.date === today) ? (stored.count || 0) : 0;
+  const ref = doc(db, 'limits', `${cid}_${today}`);
+  try {
+    const snap = await getDoc(ref);
+    return snap.exists() ? (snap.data().count || 0) : 0;
+  } catch { return 0; }
 }
 
 // ── UI PREMIUM BADGE ─────────────────────────────────────────
@@ -168,25 +169,21 @@ function updatePremiumBadge() {
     badge.innerHTML = `⭐ Premium actif — expire le ${exp}`;
     badge.style.color = '#f59e0b';
     badge.style.display = 'block';
-    counter.style.display = 'none'; // toujours caché si premium
-    return; // stop ici, ne jamais aller plus loin
+    counter.style.display = 'none';
+  } else {
+    badge.style.display = 'none';
+    getDownloadCount().then(count => {
+      const left = DAILY_LIMIT - count;
+      counter.textContent = `${left} téléchargement${left > 1 ? 's' : ''} gratuit${left > 1 ? 's' : ''} restant aujourd'hui`;
+      counter.style.color = left <= 1 ? '#ef4444' : '#6b7280';
+      counter.style.display = 'block';
+    });
   }
-
-  badge.style.display = 'none';
-  // Compteur local uniquement — pas de Firebase
-  const today = todayKey();
-  const stored = JSON.parse(localStorage.getItem('dlCount') || '{}');
-  const count = (stored.date === today) ? (stored.count || 0) : 0;
-  const left = Math.max(0, DAILY_LIMIT - count);
-  counter.textContent = `${left} téléchargement${left > 1 ? 's' : ''} gratuit${left > 1 ? 's' : ''} restant aujourd'hui`;
-  counter.style.color = left <= 1 ? '#ef4444' : '#6b7280';
-  counter.style.display = 'block';
 }
 
 // ── TABS ─────────────────────────────────────────────────────
 const tabPlaceholders = {
   yt: 'Colle ton lien YouTube ici…',
-  ig: 'Colle ton lien Instagram ici…',
   tt: 'Colle ton lien TikTok ici…'
 };
 
@@ -294,10 +291,9 @@ async function handleDownload(e, encodedUrl, fmt, q) {
   await recordDownload();
   updatePremiumBadge();
 
-  // Déclenche le téléchargement via un lien temporaire
-  const dlUrl = `${BACKEND}/download?url=${encodedUrl}&format=${fmt}&quality=${q}`;
+  // Lien temporaire pour forcer le téléchargement
   const a = document.createElement('a');
-  a.href = dlUrl;
+  a.href = `${BACKEND}/download?url=${encodedUrl}&format=${fmt}&quality=${q}`;
   a.download = '';
   document.body.appendChild(a);
   a.click();
@@ -351,10 +347,6 @@ async function activateCode() {
 // ── INIT ──────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
   await checkSavedPremium();
-  // Si premium actif, on efface le compteur local pour éviter tout blocage résiduel
-  if (isPremium) {
-    localStorage.removeItem('dlCount');
-  }
   updatePremiumBadge();
 
   document.getElementById('urlInput').addEventListener('keydown', e => {
@@ -362,7 +354,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 });
 
-// Expose functions
+// Expose functions to global scope
 window.switchTab = switchTab;
 window.selectFmt = selectFmt;
 window.analyze = analyze;
