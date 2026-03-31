@@ -153,11 +153,21 @@ def _extract_yt_id(url: str) -> str:
 def _save_stream(dl_url: str, title: str, ext: str) -> str:
     safe = re.sub(r'[^\w\-]', '_', title)[:60]
     path = os.path.join(DOWNLOAD_PATH, f"{safe}{ext}")
-    with httpx.stream("GET", dl_url, timeout=120, follow_redirects=True,
-                      headers={"User-Agent": "Mozilla/5.0"}) as r:
-        r.raise_for_status()
+    hdrs = {
+        "User-Agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Accept":          "*/*",
+        "Accept-Encoding": "identity",
+        "Range":           "bytes=0-",          # indispensable pour googlevideo
+        "Referer":         "https://www.youtube.com/",
+        "Origin":          "https://www.youtube.com",
+    }
+    with httpx.stream("GET", dl_url, timeout=300, follow_redirects=True, headers=hdrs) as r:
+        if r.status_code not in (200, 206):
+            raise RuntimeError(f"CDN refused: {r.status_code}")
         with open(path, "wb") as f:
-            for chunk in r.iter_bytes(8192): f.write(chunk)
+            for chunk in r.iter_bytes(65536): f.write(chunk)
+    if os.path.getsize(path) == 0:
+        raise RuntimeError("Downloaded file is 0 bytes")
     return path
 
 # ── RapidAPI ──────────────────────────────────────────────────────────────────
@@ -267,7 +277,8 @@ async def get_info(url: str):
                 if r.status_code == 200:
                     d = r.json()
                     return {"title": d.get("title", "YouTube"), "duration": int(d.get("duration", 0) or 0),
-                            "thumbnail": None, "uploader": "YouTube", "platform": platform}
+                            "thumbnail": f"https://img.youtube.com/vi/{_extract_yt_id(url)}/hqdefault.jpg",
+                            "uploader": "YouTube", "platform": platform}
         except Exception as e2:
             logger.error(f"RapidAPI info [{platform}]: {e2}")
 
