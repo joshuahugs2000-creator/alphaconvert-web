@@ -62,6 +62,17 @@ def detect_platform(url: str):
         return "tiktok"
     return "unknown"
 
+async def resolve_tiktok_url(url: str) -> str:
+    """Resolve short TikTok URLs (vt.tiktok.com, vm.tiktok.com) to full URL."""
+    if "vt.tiktok.com" in url or "vm.tiktok.com" in url:
+        try:
+            async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:
+                r = await client.get(url, headers={"User-Agent": "Mozilla/5.0"})
+                return str(r.url)
+        except Exception as e:
+            logger.warning(f"Failed to resolve short TikTok URL: {e}")
+    return url
+
 def sanitize_filename(name: str) -> str:
     return "".join(c for c in name if c not in r'\/:*?"<>|').strip()[:80]
 
@@ -135,9 +146,11 @@ async def get_info(url: str):
                     }
 
             elif platform == "tiktok":
+                resolved_url = await resolve_tiktok_url(url)
+                logger.info(f"TikTok URL resolved: {resolved_url[:80]}")
                 r = await client.get(
                     "https://tiktok-scraper7.p.rapidapi.com/video/info",
-                    params={"url": url, "hd": "1"},
+                    params={"url": resolved_url, "hd": "1"},
                     headers={"X-RapidAPI-Key": api_key, "X-RapidAPI-Host": "tiktok-scraper7.p.rapidapi.com"}
                 )
                 if r.status_code == 200:
@@ -149,6 +162,8 @@ async def get_info(url: str):
                         "uploader": d.get("author", {}).get("nickname", "TikTok"),
                         "platform": "tiktok"
                     }
+                else:
+                    logger.error(f"TikTok scraper7 /info returned {r.status_code}: {r.text[:200]}")
 
         except Exception as e:
             logger.error(f"Info error [{platform}]: {e}")
@@ -212,15 +227,18 @@ async def download(url: str, format: str = "mp4", quality: str = "720"):
                                 dl_url = best["url"]
                                 title = sanitize_filename(d.get("title", "video"))
                                 # Stream en chunks pour forcer le téléchargement
-                                async with client.stream("GET", dl_url) as stream:
-                                    headers = {
-                                        "Content-Disposition": f'attachment; filename="{title}.mp4"',
-                                        "Content-Type": "video/mp4",
-                                    }
-                                    ct = stream.headers.get("content-length")
-                                    if ct:
-                                        headers["Content-Length"] = ct
-                                    return StreamingResponse(stream.aiter_bytes(chunk_size=65536), headers=headers)
+                                # Download complet puis envoyer (évite les coupures 0-octet)
+                                dl_resp = await client.get(dl_url)
+                                if dl_resp.status_code == 200 and len(dl_resp.content) > 0:
+                                    return StreamingResponse(
+                                        iter([dl_resp.content]),
+                                        headers={
+                                            "Content-Disposition": f'attachment; filename="{title}.mp4"',
+                                            "Content-Type": "video/mp4",
+                                            "Content-Length": str(len(dl_resp.content)),
+                                        }
+                                    )
+                                logger.warning(f"yt-api MP4 download empty, content length: {len(dl_resp.content)}")
                     except Exception as e:
                         logger.warning(f"yt-api MP4 failed: {e}")
 
@@ -246,9 +264,10 @@ async def download(url: str, format: str = "mp4", quality: str = "720"):
                             )
 
             elif platform == "tiktok":
+                resolved_url = await resolve_tiktok_url(url)
                 r = await client.get(
                     "https://tiktok-scraper7.p.rapidapi.com/video/info",
-                    params={"url": url, "hd": "1"},
+                    params={"url": resolved_url, "hd": "1"},
                     headers={"X-RapidAPI-Key": api_key, "X-RapidAPI-Host": "tiktok-scraper7.p.rapidapi.com"}
                 )
                 if r.status_code == 200:
@@ -265,7 +284,6 @@ async def download(url: str, format: str = "mp4", quality: str = "720"):
                         ext = "mp4"
 
                     if dl_url:
-                        # Stream côté serveur pour éviter CORS/anti-hotlink
                         async with client.stream("GET", dl_url, headers={"User-Agent": "Mozilla/5.0"}) as stream:
                             headers = {
                                 "Content-Disposition": f'attachment; filename="{title}.{ext}"',
@@ -275,6 +293,8 @@ async def download(url: str, format: str = "mp4", quality: str = "720"):
                             if ct:
                                 headers["Content-Length"] = ct
                             return StreamingResponse(stream.aiter_bytes(chunk_size=65536), headers=headers)
+                else:
+                    logger.error(f"TikTok download scraper7 returned {r.status_code}: {r.text[:200]}")
 
         except Exception as e:
             logger.error(f"Download error [{platform}]: {e}")
