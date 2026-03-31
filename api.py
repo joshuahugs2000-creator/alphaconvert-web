@@ -1,13 +1,13 @@
 """
 api.py — Backend FastAPI AlphaConvert
-YouTube MP4 : 3 APIs en cascade (ytstream → youtube-media-downloader → yt-dlp+ffmpeg)
-TikTok : RapidAPI tiktok-scraper7 (inchangé, marche déjà)
+YouTube : YTStream → YTMedia → yt-dlp (cascade, stream direct)
+TikTok  : RapidAPI tiktok-scraper7
 """
 import os, re, logging, unicodedata, httpx, urllib.parse, time, glob, uuid, shutil
 from collections import defaultdict
 from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 import yt_dlp
 
@@ -84,8 +84,7 @@ def _get_rapidapi_key():
     _rapi_idx += 1
     return key
 
-PROXY_URL = os.environ.get("PROXY_URL","")
-
+PROXY_URL  = os.environ.get("PROXY_URL","")
 FFMPEG_PATH = shutil.which("ffmpeg") or "/usr/bin/ffmpeg"
 FFMPEG_OK   = os.path.isfile(FFMPEG_PATH)
 logger.info(f"ffmpeg={FFMPEG_PATH} exists={FFMPEG_OK}")
@@ -128,6 +127,27 @@ def _serve(path: str, title: str) -> FileResponse:
     return FileResponse(path, media_type="application/octet-stream", filename=dl_name,
                         headers={"Content-Disposition": f'attachment; filename="{dl_name}"'})
 
+def _stream_url(dl_url: str, title: str, ext: str, referer: str = "") -> StreamingResponse:
+    """Stream l'URL distante directement vers le client sans sauvegarder."""
+    req_headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+    if referer:
+        req_headers["Referer"] = referer
+    dl_name    = f"{safe_filename(title)}{ext}"
+    media_type = "video/mp4" if ext == ".mp4" else "audio/mpeg"
+
+    def iter_content():
+        with httpx.stream("GET", dl_url, headers=req_headers,
+                          timeout=300, follow_redirects=True) as r:
+            r.raise_for_status()
+            for chunk in r.iter_bytes(65536):
+                yield chunk
+
+    return StreamingResponse(
+        iter_content(),
+        media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="{dl_name}"'}
+    )
+
 def _save_stream(dl_url: str, title: str, ext: str, referer: str = "") -> str:
     path = os.path.join(DOWNLOAD_PATH, f"{uuid.uuid4().hex[:8]}{ext}")
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
@@ -143,180 +163,125 @@ def _save_stream(dl_url: str, title: str, ext: str, referer: str = "") -> str:
         raise ValueError(f"Fichier trop petit: {size} bytes")
     return path
 
-# ══════════════════════════════════════════════════════════════════════════════
-# MÉTHODE 1 : YTStream RapidAPI  (ytstream-download-youtube-videos)
-# Souscrire sur : https://rapidapi.com/ytjar/api/ytstream-download-youtube-videos
-# Plan BASIC gratuit : 500 req/mois
-# ══════════════════════════════════════════════════════════════════════════════
-def _ytstream_download(url: str, fmt: str, quality: str):
-    """Retourne (path, title) ou lève une exception."""
-    key = _get_rapidapi_key()
-    if not key:
-        raise ValueError("Pas de clé RapidAPI")
-
-    vid = _extract_yt_id(url)
-    headers = {
-        "X-RapidAPI-Key":  key,
-        "X-RapidAPI-Host": "ytstream-download-youtube-videos.p.rapidapi.com"
-    }
+# ─────────────────────────────────────────────────────────────────────────────
+# YTStream helpers
+# ─────────────────────────────────────────────────────────────────────────────
+def _get_ytstream_url(vid: str, fmt: str, quality: str, key: str):
     r = httpx.get("https://ytstream-download-youtube-videos.p.rapidapi.com/dl",
-                  params={"id": vid}, headers=headers, timeout=30)
+                  params={"id": vid},
+                  headers={"X-RapidAPI-Key": key,
+                           "X-RapidAPI-Host": "ytstream-download-youtube-videos.p.rapidapi.com"},
+                  timeout=25)
     r.raise_for_status()
     data  = r.json()
-    title = data.get("title", "video")
+    title = data.get("title","video")
 
     if fmt == "mp3":
-        af = data.get("adaptiveFormats", [])
-        audio_items = [f for f in af if "audio" in f.get("mimeType","").lower()]
-        dl_url = audio_items[0].get("url") if audio_items else None
+        af    = data.get("adaptiveFormats",[])
+        alist = [f for f in af if "audio" in f.get("mimeType","").lower()]
+        dl_url = alist[0].get("url") if alist else None
         ext    = ".mp3"
     else:
-        q_int = int(quality)
-        # formats est une LISTE [{quality:"720p", url:...}, ...]
-        formats = data.get("formats", [])
+        q_int   = int(quality)
+        formats = data.get("formats",[])
         dl_url  = None
         if isinstance(formats, list):
             mp4s = []
             for f in formats:
                 q_str = str(f.get("quality","")).replace("p","").replace("hd","").strip()
-                try:
-                    mp4s.append((int(q_str), f.get("url","")))
-                except ValueError:
-                    pass
+                try: mp4s.append((int(q_str), f.get("url","")))
+                except ValueError: pass
             mp4s.sort(key=lambda x: x[0], reverse=True)
-            dl_url = next((u for q, u in mp4s if q <= q_int and u), None)
-            if not dl_url and mp4s:
-                dl_url = mp4s[-1][1]
+            dl_url = next((u for q,u in mp4s if q <= q_int and u), None)
+            if not dl_url and mp4s: dl_url = mp4s[-1][1]
         elif isinstance(formats, dict):
-            dl_url = (formats.get(quality) or formats.get("720")
-                      or formats.get("480") or formats.get("360"))
-        # Fallback adaptiveFormats video
+            dl_url = formats.get(quality) or formats.get("720") or formats.get("480") or formats.get("360")
         if not dl_url:
-            af = data.get("adaptiveFormats", [])
+            af   = data.get("adaptiveFormats",[])
             vids = [f for f in af if f.get("mimeType","").startswith("video/mp4")]
-            if vids:
-                dl_url = vids[0].get("url")
+            if vids: dl_url = vids[0].get("url")
         ext = ".mp4"
 
     if not dl_url:
-        raise ValueError(f"YTStream: pas d'URL. formats type={type(data.get('formats'))}")
+        raise ValueError("YTStream: aucune URL")
+    return dl_url, title, ext
 
-    logger.info(f"YTStream OK title={title} ext={ext}")
-    path = _save_stream(dl_url, title, ext)
-    return path, title
-
-# ══════════════════════════════════════════════════════════════════════════════
-# MÉTHODE 2 : YouTube Media Downloader RapidAPI
-# Souscrire sur : https://rapidapi.com/DataFanatic/api/youtube-media-downloader
-# Plan BASIC gratuit
-# ══════════════════════════════════════════════════════════════════════════════
-def _ytmedia_download(url: str, fmt: str, quality: str):
-    key = _get_rapidapi_key()
-    if not key:
-        raise ValueError("Pas de clé RapidAPI")
-
-    vid = _extract_yt_id(url)
-    headers = {
-        "X-RapidAPI-Key":  key,
-        "X-RapidAPI-Host": "youtube-media-downloader.p.rapidapi.com"
-    }
-
-    # Étape 1 : récupérer les infos
+# ─────────────────────────────────────────────────────────────────────────────
+# YTMedia helpers
+# ─────────────────────────────────────────────────────────────────────────────
+def _get_ytmedia_url(vid: str, fmt: str, quality: str, key: str):
     r = httpx.get("https://youtube-media-downloader.p.rapidapi.com/v2/video/details",
-                  params={"videoId": vid}, headers=headers, timeout=30)
+                  params={"videoId": vid},
+                  headers={"X-RapidAPI-Key": key,
+                           "X-RapidAPI-Host": "youtube-media-downloader.p.rapidapi.com"},
+                  timeout=25)
     r.raise_for_status()
     data  = r.json()
-    title = data.get("title", "video")
+    title = data.get("title","video")
 
     if fmt == "mp3":
-        audios = data.get("audios", [])
-        if not audios:
-            raise ValueError("YTMedia: pas d'audio")
+        audios = data.get("audios",[])
+        if not audios: raise ValueError("YTMedia: pas d'audio")
         dl_url = audios[0].get("url")
         ext    = ".mp3"
     else:
-        videos = data.get("videos", [])
+        videos = data.get("videos",[])
         q_int  = int(quality)
-        # Prendre toutes les vidéos avec URL (extension peut être absente)
-        all_vids = [v for v in videos if v.get("url")]
-        mp4s = [v for v in all_vids if "mp4" in str(v.get("extension","")).lower()]
-        if not mp4s:
-            mp4s = all_vids  # fallback: prendre tout
-        mp4s.sort(key=lambda v: v.get("height", 0), reverse=True)
+        all_v  = [v for v in videos if v.get("url")]
+        mp4s   = [v for v in all_v if "mp4" in str(v.get("extension","")).lower()] or all_v
+        mp4s.sort(key=lambda v: v.get("height",0), reverse=True)
         chosen = next((v for v in mp4s if (v.get("height") or 0) <= q_int), None) or (mp4s[0] if mp4s else None)
-        if not chosen:
-            raise ValueError("YTMedia: pas de vidéo disponible")
+        if not chosen: raise ValueError("YTMedia: pas de vidéo")
         dl_url = chosen.get("url")
         ext    = ".mp4"
 
-    if not dl_url:
-        raise ValueError("YTMedia: URL vide")
+    if not dl_url: raise ValueError("YTMedia: URL vide")
+    return dl_url, title, ext
 
-    logger.info(f"YTMedia OK title={title} ext={ext}")
-    path = _save_stream(dl_url, title, ext)
-    return path, title
-
-# ══════════════════════════════════════════════════════════════════════════════
-# MÉTHODE 3 : yt-dlp local (avec ffmpeg si dispo)
-# ══════════════════════════════════════════════════════════════════════════════
+# ─────────────────────────────────────────────────────────────────────────────
+# yt-dlp local
+# ─────────────────────────────────────────────────────────────────────────────
 def _ytdlp_download(url: str, fmt: str, quality: str):
     uid  = uuid.uuid4().hex[:8]
-    opts = {
-        "outtmpl":        os.path.join(DOWNLOAD_PATH, f"{uid}.%(ext)s"),
-        "quiet":          True,
-        "no_warnings":    True,
-        "noplaylist":     True,
-        "restrictfilenames": False,
-    }
-    if FFMPEG_OK:
-        opts["ffmpeg_location"] = FFMPEG_PATH
-    if PROXY_URL:
-        opts["proxy"] = PROXY_URL
-
+    opts = {"outtmpl": os.path.join(DOWNLOAD_PATH,f"{uid}.%(ext)s"),
+            "quiet":True,"no_warnings":True,"noplaylist":True,"restrictfilenames":False}
+    if FFMPEG_OK: opts["ffmpeg_location"] = FFMPEG_PATH
+    if PROXY_URL: opts["proxy"] = PROXY_URL
     if fmt == "mp3":
         if FFMPEG_OK:
             opts["format"] = "bestaudio/best"
-            opts["postprocessors"] = [{"key":"FFmpegExtractAudio",
-                                        "preferredcodec":"mp3","preferredquality":"192"}]
+            opts["postprocessors"] = [{"key":"FFmpegExtractAudio","preferredcodec":"mp3","preferredquality":"192"}]
         else:
             opts["format"] = "bestaudio[ext=m4a]/bestaudio"
     else:
-        fmts_ff = {
-            "1080": "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=1080]+bestaudio/best",
-            "720":  "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=720]+bestaudio/best",
-            "480":  "bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=480]+bestaudio/best",
-            "360":  "bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=360]+bestaudio/best",
-        }
-        fmts_noff = {
-            "1080": "best[height<=720][ext=mp4]/best[ext=mp4]/best",
-            "720":  "best[height<=720][ext=mp4]/best[ext=mp4]/best",
-            "480":  "best[height<=480][ext=mp4]/best[ext=mp4]/best",
-            "360":  "best[height<=360][ext=mp4]/best[ext=mp4]/best",
-        }
+        fmts_ff   = {"1080":"bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best",
+                     "720": "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best",
+                     "480": "bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best",
+                     "360": "bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/best"}
+        fmts_noff = {"1080":"best[height<=720][ext=mp4]/best[ext=mp4]/best",
+                     "720": "best[height<=720][ext=mp4]/best[ext=mp4]/best",
+                     "480": "best[height<=480][ext=mp4]/best[ext=mp4]/best",
+                     "360": "best[height<=360][ext=mp4]/best[ext=mp4]/best"}
         opts["format"] = fmts_ff[quality] if FFMPEG_OK else fmts_noff[quality]
         opts["merge_output_format"] = "mp4"
-
     with yt_dlp.YoutubeDL(opts) as ydl:
         info = ydl.extract_info(url, download=True)
-
     path = _find_file(uid)
-    if not path:
-        raise ValueError("yt-dlp: fichier introuvable après téléchargement")
+    if not path: raise ValueError("yt-dlp: fichier introuvable")
     return path, info.get("title","video")
 
-# ══════════════════════════════════════════════════════════════════════════════
+# ─────────────────────────────────────────────────────────────────────────────
 # TikTok
-# ══════════════════════════════════════════════════════════════════════════════
+# ─────────────────────────────────────────────────────────────────────────────
 def _tiktok_download(url: str, fmt: str):
     key = _get_rapidapi_key()
-    if not key:
-        raise ValueError("Pas de clé RapidAPI")
+    if not key: raise ValueError("Pas de clé RapidAPI")
     r = httpx.get("https://tiktok-scraper7.p.rapidapi.com/video/info",
-        params={"url": url, "hd": "1"},
-        headers={"X-RapidAPI-Key": key, "X-RapidAPI-Host": "tiktok-scraper7.p.rapidapi.com"},
+        params={"url":url,"hd":"1"},
+        headers={"X-RapidAPI-Key":key,"X-RapidAPI-Host":"tiktok-scraper7.p.rapidapi.com"},
         timeout=30)
     r.raise_for_status()
-    d     = r.json().get("data", {})
+    d     = r.json().get("data",{})
     title = d.get("title","tiktok")
     if fmt == "mp3":
         dl_url = (d.get("music_info") or {}).get("play") or d.get("wmplay") or d.get("play")
@@ -324,58 +289,47 @@ def _tiktok_download(url: str, fmt: str):
     else:
         dl_url = d.get("hdplay") or d.get("play") or d.get("wmplay")
         ext    = ".mp4"
-    if not dl_url:
-        raise ValueError("TikTok: pas d'URL")
+    if not dl_url: raise ValueError("TikTok: pas d'URL")
     path = _save_stream(dl_url, title, ext, referer="https://www.tiktok.com/")
     return path, title
 
-# ══════════════════════════════════════════════════════════════════════════════
+# ─────────────────────────────────────────────────────────────────────────────
 # INFO helpers
-# ══════════════════════════════════════════════════════════════════════════════
+# ─────────────────────────────────────────────────────────────────────────────
 def _ytstream_info(url: str) -> dict:
-    """Récupère titre + durée via YTStream RapidAPI."""
     key = _get_rapidapi_key()
     if not key: raise ValueError("Pas de clé")
     vid = _extract_yt_id(url)
     r = httpx.get("https://ytstream-download-youtube-videos.p.rapidapi.com/dl",
-                  params={"id": vid},
-                  headers={"X-RapidAPI-Key": key,
-                           "X-RapidAPI-Host": "ytstream-download-youtube-videos.p.rapidapi.com"},
+                  params={"id":vid},
+                  headers={"X-RapidAPI-Key":key,"X-RapidAPI-Host":"ytstream-download-youtube-videos.p.rapidapi.com"},
                   timeout=20)
     r.raise_for_status()
     d = r.json()
-    return {
-        "title":    d.get("title", "Video"),
-        "duration": d.get("lengthSeconds", 0),
-        "thumbnail": (d.get("thumbnail") or {}).get("thumbnails", [{}])[-1].get("url","")
-                     or f"https://img.youtube.com/vi/{vid}/hqdefault.jpg",
-        "uploader": d.get("author", "YouTube"),
-        "platform": "youtube"
-    }
+    thumbs = d.get("thumbnail",{})
+    if isinstance(thumbs, dict):
+        thumb = (thumbs.get("thumbnails") or [{}])[-1].get("url","")
+    else:
+        thumb = str(thumbs)
+    if not thumb: thumb = f"https://img.youtube.com/vi/{vid}/hqdefault.jpg"
+    return {"title":d.get("title","Video"),"duration":int(d.get("lengthSeconds",0) or 0),
+            "thumbnail":thumb,"uploader":d.get("author","YouTube"),"platform":"youtube"}
 
 def _ytmedia_info(url: str) -> dict:
-    """Récupère titre + durée via YouTube Media Downloader RapidAPI."""
     key = _get_rapidapi_key()
     if not key: raise ValueError("Pas de clé")
     vid = _extract_yt_id(url)
     r = httpx.get("https://youtube-media-downloader.p.rapidapi.com/v2/video/details",
-                  params={"videoId": vid},
-                  headers={"X-RapidAPI-Key": key,
-                           "X-RapidAPI-Host": "youtube-media-downloader.p.rapidapi.com"},
+                  params={"videoId":vid},
+                  headers={"X-RapidAPI-Key":key,"X-RapidAPI-Host":"youtube-media-downloader.p.rapidapi.com"},
                   timeout=20)
     r.raise_for_status()
     d = r.json()
-    thumb = ""
-    thumbs = d.get("thumbnails", [])
-    if thumbs: thumb = thumbs[-1].get("url","")
+    thumbs = d.get("thumbnails",[])
+    thumb  = thumbs[-1].get("url","") if thumbs else ""
     if not thumb: thumb = f"https://img.youtube.com/vi/{vid}/hqdefault.jpg"
-    return {
-        "title":    d.get("title", "Video"),
-        "duration": d.get("lengthSeconds", 0),
-        "thumbnail": thumb,
-        "uploader": d.get("author", "YouTube"),
-        "platform": "youtube"
-    }
+    return {"title":d.get("title","Video"),"duration":int(d.get("lengthSeconds",0) or 0),
+            "thumbnail":thumb,"uploader":d.get("author","YouTube"),"platform":"youtube"}
 
 # ══════════════════════════════════════════════════════════════════════════════
 # INFO endpoint
@@ -388,107 +342,47 @@ async def get_info(url: str):
     if platform == "unknown":
         raise HTTPException(status_code=400, detail="Plateforme non supportee")
 
-    # ── YouTube : essai yt-dlp, puis YTStream, puis YTMedia ──────────────────
     if platform == "youtube":
-        # 1) yt-dlp (rapide si Railway ne bloque pas)
         opts = {"quiet":True,"no_warnings":True,"skip_download":True,"noplaylist":True}
         if PROXY_URL: opts["proxy"] = PROXY_URL
         try:
             with yt_dlp.YoutubeDL(opts) as ydl:
                 info = ydl.extract_info(url, download=False)
-            thumb = info.get("thumbnail","")
-            if not thumb:
-                thumb = f"https://img.youtube.com/vi/{_extract_yt_id(url)}/hqdefault.jpg"
             title = info.get("title","")
             if title and title.lower() not in ("youtube","video",""):
-                logger.info(f"yt-dlp info OK: {title}")
+                thumb = info.get("thumbnail","") or f"https://img.youtube.com/vi/{_extract_yt_id(url)}/hqdefault.jpg"
                 return {"title":title,"duration":info.get("duration",0),
-                        "thumbnail":thumb,"uploader":info.get("uploader","YouTube"),
-                        "platform":platform}
+                        "thumbnail":thumb,"uploader":info.get("uploader","YouTube"),"platform":platform}
         except Exception as e:
-            logger.warning(f"yt-dlp info failed: {e}")
-
-        # 2) YTStream RapidAPI
+            logger.warning(f"yt-dlp info: {e}")
         try:
-            result = _ytstream_info(url)
-            logger.info(f"YTStream info OK: {result['title']}")
-            return result
+            return _ytstream_info(url)
         except Exception as e:
-            logger.warning(f"YTStream info failed: {e}")
-
-        # 3) YouTube Media Downloader
+            logger.warning(f"YTStream info: {e}")
         try:
-            result = _ytmedia_info(url)
-            logger.info(f"YTMedia info OK: {result['title']}")
-            return result
+            return _ytmedia_info(url)
         except Exception as e:
-            logger.warning(f"YTMedia info failed: {e}")
-
-        # 4) Fallback minimal — au moins la miniature
+            logger.warning(f"YTMedia info: {e}")
         vid = _extract_yt_id(url)
         return {"title":"Vidéo YouTube","duration":0,
                 "thumbnail":f"https://img.youtube.com/vi/{vid}/hqdefault.jpg",
                 "uploader":"YouTube","platform":platform}
 
-    # ── TikTok ────────────────────────────────────────────────────────────────
+    # TikTok
     opts = {"quiet":True,"no_warnings":True,"skip_download":True,"noplaylist":True}
     if PROXY_URL: opts["proxy"] = PROXY_URL
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(url, download=False)
-        thumb = info.get("thumbnail","")
+        thumb = info.get("thumbnail","") or ""
         if not thumb:
             thumbs = info.get("thumbnails",[])
             if thumbs: thumb = thumbs[-1].get("url","")
         return {"title":info.get("title","TikTok"),"duration":info.get("duration",0),
                 "thumbnail":thumb,"uploader":info.get("uploader",""),"platform":platform}
     except Exception as e:
-        logger.warning(f"yt-dlp TikTok info failed: {e}")
-
+        logger.warning(f"TikTok info: {e}")
     raise HTTPException(status_code=400, detail="Impossible d'analyser ce lien")
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# DEBUG endpoint (à supprimer après que tout marche)
-# ══════════════════════════════════════════════════════════════════════════════
-@app.get("/debug-yt")
-async def debug_yt(url: str = "https://youtu.be/dQw4w9WgXcQ"):
-    url = clean_url(validate_url(url))
-    vid = _extract_yt_id(url)
-    key = _get_rapidapi_key()
-    results = {"vid": vid, "has_key": bool(key), "ffmpeg": FFMPEG_OK}
-
-    # Test YTStream
-    try:
-        r = httpx.get("https://ytstream-download-youtube-videos.p.rapidapi.com/dl",
-                      params={"id": vid},
-                      headers={"X-RapidAPI-Key": key or "",
-                               "X-RapidAPI-Host": "ytstream-download-youtube-videos.p.rapidapi.com"},
-                      timeout=15)
-        results["ytstream_status"] = r.status_code
-        if r.status_code == 200:
-            d = r.json()
-            results["ytstream_title"] = d.get("title","?")
-            results["ytstream_formats"] = list((d.get("formats") or {}).keys())
-    except Exception as e:
-        results["ytstream_error"] = str(e)
-
-    # Test YTMedia
-    try:
-        r2 = httpx.get("https://youtube-media-downloader.p.rapidapi.com/v2/video/details",
-                       params={"videoId": vid},
-                       headers={"X-RapidAPI-Key": key or "",
-                                "X-RapidAPI-Host": "youtube-media-downloader.p.rapidapi.com"},
-                       timeout=15)
-        results["ytmedia_status"] = r2.status_code
-        if r2.status_code == 200:
-            d2 = r2.json()
-            results["ytmedia_title"] = d2.get("title","?")
-            results["ytmedia_video_count"] = len(d2.get("videos",[]))
-    except Exception as e:
-        results["ytmedia_error"] = str(e)
-
-    return results
 
 # ══════════════════════════════════════════════════════════════════════════════
 # DOWNLOAD endpoint
@@ -498,64 +392,89 @@ async def download(url: str, format: str = "mp4", quality: str = "720"):
     url      = validate_url(url)
     url      = clean_url(url)
     platform = detect_platform(url)
-
     if format  not in ("mp4","mp3"): format  = "mp4"
     if quality not in ("360","480","720","1080"): quality = "720"
+    logger.info(f"DL | platform={platform} fmt={format} q={quality}")
 
-    logger.info(f"DL start | platform={platform} format={format} quality={quality} ffmpeg={FFMPEG_OK}")
-
-    # ── TikTok ────────────────────────────────────────────────────────────────
     if platform == "tiktok":
         try:
             path, title = _tiktok_download(url, format)
             return _serve(path, title)
         except Exception as e:
-            logger.error(f"TikTok failed: {e}")
+            logger.error(f"TikTok: {e}")
             raise HTTPException(status_code=500, detail="Telechargement TikTok impossible")
 
-    # ── YouTube : cascade de 3 méthodes ──────────────────────────────────────
+    # YouTube — cascade stream direct
+    key    = _get_rapidapi_key()
+    vid    = _extract_yt_id(url)
     errors = []
 
-    # Méthode 1 : YTStream RapidAPI
-    try:
-        logger.info("YouTube: essai méthode 1 (YTStream)")
-        path, title = _ytstream_download(url, format, quality)
-        return _serve(path, title)
-    except Exception as e:
-        errors.append(f"YTStream: {e}")
-        logger.warning(f"YTStream échoué: {e}")
+    if key:
+        try:
+            logger.info("YT: essai YTStream")
+            dl_url, title, ext = _get_ytstream_url(vid, format, quality, key)
+            logger.info(f"YTStream OK → stream title={title}")
+            return _stream_url(dl_url, title, ext)
+        except Exception as e:
+            errors.append(f"YTStream:{e}"); logger.warning(f"YTStream: {e}")
 
-    # Méthode 2 : YouTube Media Downloader RapidAPI
-    try:
-        logger.info("YouTube: essai méthode 2 (YTMedia)")
-        path, title = _ytmedia_download(url, format, quality)
-        return _serve(path, title)
-    except Exception as e:
-        errors.append(f"YTMedia: {e}")
-        logger.warning(f"YTMedia échoué: {e}")
+        try:
+            logger.info("YT: essai YTMedia")
+            dl_url, title, ext = _get_ytmedia_url(vid, format, quality, key)
+            logger.info(f"YTMedia OK → stream title={title}")
+            return _stream_url(dl_url, title, ext)
+        except Exception as e:
+            errors.append(f"YTMedia:{e}"); logger.warning(f"YTMedia: {e}")
 
-    # Méthode 3 : yt-dlp local
     try:
-        logger.info("YouTube: essai méthode 3 (yt-dlp)")
+        logger.info("YT: essai yt-dlp")
         path, title = _ytdlp_download(url, format, quality)
         return _serve(path, title)
     except Exception as e:
-        errors.append(f"yt-dlp: {e}")
-        logger.warning(f"yt-dlp échoué: {e}")
+        errors.append(f"yt-dlp:{e}"); logger.warning(f"yt-dlp: {e}")
 
-    logger.error(f"Toutes les méthodes ont échoué: {errors}")
+    logger.error(f"Toutes méthodes échouées: {errors}")
     raise HTTPException(status_code=500, detail="Telechargement impossible")
 
 # ══════════════════════════════════════════════════════════════════════════════
-# HEALTH
+# DEBUG
 # ══════════════════════════════════════════════════════════════════════════════
+@app.get("/debug-dl")
+async def debug_dl(url: str = "https://youtu.be/dQw4w9WgXcQ"):
+    url = clean_url(validate_url(url))
+    vid = _extract_yt_id(url)
+    key = _get_rapidapi_key()
+    res = {"vid":vid,"has_key":bool(key),"ffmpeg":FFMPEG_OK}
+    if key:
+        try:
+            dl_url, title, ext = _get_ytstream_url(vid, "mp4", "720", key)
+            res["ytstream_url_preview"] = dl_url[:80]+"..."
+            res["ytstream_title"] = title
+            hr = httpx.head(dl_url, timeout=10, follow_redirects=True,
+                            headers={"User-Agent":"Mozilla/5.0"})
+            res["ytstream_head_status"] = hr.status_code
+            res["ytstream_content_length"] = hr.headers.get("content-length","?")
+            res["ytstream_content_type"] = hr.headers.get("content-type","?")
+        except Exception as e:
+            res["ytstream_error"] = str(e)
+        try:
+            dl_url2, title2, ext2 = _get_ytmedia_url(vid, "mp4", "720", key)
+            res["ytmedia_url_preview"] = dl_url2[:80]+"..."
+            res["ytmedia_title"] = title2
+            hr2 = httpx.head(dl_url2, timeout=10, follow_redirects=True,
+                             headers={"User-Agent":"Mozilla/5.0"})
+            res["ytmedia_head_status"] = hr2.status_code
+            res["ytmedia_content_length"] = hr2.headers.get("content-length","?")
+        except Exception as e:
+            res["ytmedia_error"] = str(e)
+    return res
+
 @app.get("/health")
 async def health():
-    return {"status":"ok","rapidapi_keys":len(RAPIDAPI_KEYS),
-            "ffmpeg":FFMPEG_OK,"ffmpeg_path":FFMPEG_PATH}
+    return {"status":"ok","rapidapi_keys":len(RAPIDAPI_KEYS),"ffmpeg":FFMPEG_OK,"ffmpeg_path":FFMPEG_PATH}
 
 # ══════════════════════════════════════════════════════════════════════════════
-# CHAT (support Telegram)
+# CHAT
 # ══════════════════════════════════════════════════════════════════════════════
 class ChatMessage(BaseModel):
     message: str
@@ -577,7 +496,7 @@ async def send_chat(body: ChatMessage):
             return {"error":str(e)}
 
 # ══════════════════════════════════════════════════════════════════════════════
-# STATIC (doit rester en dernier)
+# STATIC — doit rester en dernier
 # ══════════════════════════════════════════════════════════════════════════════
 from fastapi.staticfiles import StaticFiles
 app.mount("/", StaticFiles(directory=".", html=True), name="static")
