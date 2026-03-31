@@ -7,8 +7,10 @@ const DAILY_LIMIT = 3;
 
 // ── FIREBASE ─────────────────────────────────────────────────
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, doc, getDoc, setDoc, updateDoc, increment, collection }
+import { getFirestore, doc, getDoc, setDoc, updateDoc, increment }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getAuth, onAuthStateChanged }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyBJgtQp4ZrOPuUhmwiQw6FmOvt7nywudOc",
@@ -20,8 +22,9 @@ const firebaseConfig = {
 };
 const fbApp = initializeApp(firebaseConfig);
 const db = getFirestore(fbApp);
+const auth = getAuth(fbApp);
 
-// ── FINGERPRINT ───────────────────────────────────────────────
+// ── FINGERPRINT (fallback sans compte) ───────────────────────
 function getFingerprint() {
   const raw = [
     navigator.userAgent,
@@ -40,7 +43,6 @@ function getFingerprint() {
   return Math.abs(hash).toString(36);
 }
 
-// ── IP ────────────────────────────────────────────────────────
 async function getIP() {
   try {
     const r = await fetch('https://api.ipify.org?format=json');
@@ -49,9 +51,12 @@ async function getIP() {
   } catch { return 'unknown'; }
 }
 
-// ── CLIENT ID ─────────────────────────────────────────────────
 let clientId = null;
 async function getClientId() {
+  // Si connecté avec Google → utiliser l'UID Firebase (stable sur tous les appareils)
+  const user = auth.currentUser;
+  if (user) return `user_${user.uid}`;
+  // Sinon fallback fingerprint+IP
   if (clientId) return clientId;
   const fp = getFingerprint();
   const ip = await getIP();
@@ -68,53 +73,97 @@ function todayKey() {
 let isPremium = false;
 let premiumExpiry = null;
 
-async function checkPremiumCode(code) {
-  try {
-    const ref = doc(db, 'premiumCodes', code.toUpperCase().trim());
-    const snap = await getDoc(ref);
-    if (!snap.exists()) return { valid: false, msg: '❌ Code invalide.' };
-    const data = snap.data();
-    if (data.used) return { valid: false, msg: '❌ Ce code a déjà été utilisé.' };
-    const expiry = new Date(data.expiresAt);
-    if (expiry < new Date()) return { valid: false, msg: '❌ Ce code est expiré.' };
-    const cid = await getClientId();
-    await updateDoc(ref, { used: true, usedBy: cid, usedAt: new Date().toISOString() });
-    localStorage.setItem('premiumCode', code.toUpperCase().trim());
-    localStorage.setItem('premiumExpiry', data.expiresAt);
-    return { valid: true, expiry: data.expiresAt, label: data.label };
-  } catch (e) {
-    return { valid: false, msg: '❌ Erreur de vérification.' };
+// Vérifie le premium depuis Firebase (lié au compte Google)
+async function checkPremiumStatus() {
+  const user = auth.currentUser;
+  if (!user) {
+    // Sans compte : vérifier seulement le localStorage (code activé en anonyme)
+    return checkLocalPremium();
   }
+
+  try {
+    const userRef = doc(db, 'users', user.uid);
+    const snap = await getDoc(userRef);
+    if (snap.exists()) {
+      const data = snap.data();
+      const isActive = data.premiumStatus === 'active';
+      const isUnlimited = data.unlimited === true;
+      const notExpired = isUnlimited || !data.premiumExpiry || new Date(data.premiumExpiry) > new Date();
+      if (isActive && notExpired) {
+        isPremium = true;
+        premiumExpiry = isUnlimited ? null : data.premiumExpiry;
+        return true;
+      }
+    }
+  } catch (e) {
+    // Firebase indispo → fallback localStorage
+    return checkLocalPremium();
+  }
+
+  // Aussi vérifier localStorage au cas où code activé avant connexion
+  return checkLocalPremium();
 }
 
-async function checkSavedPremium() {
-  const code = localStorage.getItem('premiumCode');
+function checkLocalPremium() {
   const expiry = localStorage.getItem('premiumExpiry');
-  if (!code || !expiry) return false;
-  const exp = new Date(expiry);
-  if (exp < new Date()) {
+  if (!expiry) return false;
+  if (new Date(expiry) < new Date()) {
     localStorage.removeItem('premiumCode');
     localStorage.removeItem('premiumExpiry');
     return false;
   }
-  // On fait confiance au localStorage en premier — Firebase sert uniquement à vérifier révocation
   isPremium = true;
   premiumExpiry = expiry;
-  try {
-    const ref = doc(db, 'premiumCodes', code);
-    const snap = await getDoc(ref);
-    if (!snap.exists() || snap.data().revoked) {
-      localStorage.removeItem('premiumCode');
-      localStorage.removeItem('premiumExpiry');
-      isPremium = false;
-      premiumExpiry = null;
-      return false;
-    }
-    // data.used est normal (le code a été activé par cet utilisateur), ne pas bloquer
-  } catch {
-    // Firebase indispo → on garde le premium actif
-  }
   return true;
+}
+
+// Activation d'un code premium
+async function checkPremiumCode(code) {
+  const upper = code.toUpperCase().trim();
+
+  try {
+    const ref = doc(db, 'premiumCodes', upper);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) return { valid: false, msg: '❌ Code invalide.' };
+
+    const data = snap.data();
+    if (data.revoked) return { valid: false, msg: '❌ Ce code a été révoqué.' };
+
+    const isUnlimited = data.unlimited === true;
+    const expiry = isUnlimited ? null : new Date(data.expiresAt);
+    if (!isUnlimited && expiry < new Date()) return { valid: false, msg: '❌ Ce code est expiré.' };
+
+    // Marquer le code comme utilisé
+    const user = auth.currentUser;
+    const usedBy = user ? user.uid : await getClientId();
+    await updateDoc(ref, { used: true, usedBy, usedAt: new Date().toISOString() });
+
+    // Enregistrer le premium sur le compte Firebase si connecté
+    if (user) {
+      await setDoc(doc(db, 'users', user.uid), {
+        premiumStatus: 'active',
+        unlimited: isUnlimited,
+        premiumExpiry: isUnlimited ? null : data.expiresAt,
+        premiumLabel: data.label,
+        activatedAt: new Date().toISOString(),
+        activatedCode: upper,
+        email: user.email
+      }, { merge: true });
+    }
+
+    // Toujours sauvegarder en localStorage aussi (fallback)
+    if (!isUnlimited) {
+      localStorage.setItem('premiumCode', upper);
+      localStorage.setItem('premiumExpiry', data.expiresAt);
+    }
+
+    isPremium = true;
+    premiumExpiry = isUnlimited ? null : data.expiresAt;
+
+    return { valid: true, expiry: data.expiresAt, label: data.label, unlimited: isUnlimited };
+  } catch (e) {
+    return { valid: false, msg: '❌ Erreur de vérification.' };
+  }
 }
 
 // ── DOWNLOAD LIMIT ────────────────────────────────────────────
@@ -165,7 +214,9 @@ function updatePremiumBadge() {
   if (!badge || !counter) return;
 
   if (isPremium) {
-    badge.innerHTML = `⭐ Premium actif`;
+    badge.innerHTML = premiumExpiry
+      ? `⭐ Premium actif — expire le ${new Date(premiumExpiry).toLocaleDateString('fr', {day:'2-digit', month:'long', year:'numeric'})}`
+      : `⭐ Premium actif`;
     badge.style.color = '#f59e0b';
     badge.style.display = 'block';
     counter.style.display = 'none';
@@ -290,7 +341,6 @@ async function handleDownload(e, encodedUrl, fmt, q) {
   await recordDownload();
   updatePremiumBadge();
 
-  // Lien temporaire pour forcer le téléchargement
   const a = document.createElement('a');
   a.href = `${BACKEND}/download?url=${encodedUrl}&format=${fmt}&quality=${q}`;
   a.download = '';
@@ -329,10 +379,14 @@ async function activateCode() {
   const result = await checkPremiumCode(code);
   if (result.valid) {
     isPremium = true;
-    premiumExpiry = result.expiry;
-    const exp = new Date(result.expiry).toLocaleDateString('fr', {day:'2-digit', month:'long', year:'numeric'});
+    premiumExpiry = result.unlimited ? null : result.expiry;
+
+    const expText = result.unlimited
+      ? 'Accès illimité permanent !'
+      : `Expire le ${new Date(result.expiry).toLocaleDateString('fr', {day:'2-digit', month:'long', year:'numeric'})}`;
+
     document.getElementById('codeMsg').style.color = '#10b981';
-    document.getElementById('codeMsg').textContent = `✅ Premium activé ! Expire le ${exp}`;
+    document.getElementById('codeMsg').textContent = `✅ Premium activé ! ${expText}`;
     updatePremiumBadge();
     setTimeout(() => closeCodeModal(), 2000);
   } else {
@@ -345,8 +399,13 @@ async function activateCode() {
 
 // ── INIT ──────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
-  await checkSavedPremium();
-  updatePremiumBadge();
+  // Écouter les changements d'état de connexion Google
+  onAuthStateChanged(auth, async (user) => {
+    isPremium = false;
+    premiumExpiry = null;
+    await checkPremiumStatus();
+    updatePremiumBadge();
+  });
 
   document.getElementById('urlInput').addEventListener('keydown', e => {
     if (e.key === 'Enter') analyze();
