@@ -250,10 +250,7 @@ def _tiktok_rapidapi(url: str, fmt: str):
 
 def _youtube_rapidapi_info(url: str) -> dict | None:
     """
-    Récupère les infos d'une vidéo YouTube via RapidAPI (YouTube v3).
-    Utilisé en fallback quand yt-dlp est bloqué.
-    Variable d'env requise : RAPIDAPI_KEYS
-    API utilisée : youtube-media-downloader.p.rapidapi.com
+    Récupère les infos YouTube via RapidAPI youtube-mp36 (comme l'ancienne version qui marchait).
     """
     key = _get_rapidapi_key()
     if not key:
@@ -263,47 +260,36 @@ def _youtube_rapidapi_info(url: str) -> dict | None:
         return None
     try:
         r = httpx.get(
-            "https://youtube-media-downloader.p.rapidapi.com/v2/video/details",
-            params={"videoId": vid},
+            "https://youtube-mp36.p.rapidapi.com/dl",
+            params={"id": vid},
             headers={
                 "X-RapidAPI-Key":  key,
-                "X-RapidAPI-Host": "youtube-media-downloader.p.rapidapi.com",
+                "X-RapidAPI-Host": "youtube-mp36.p.rapidapi.com",
             },
-            timeout=20,
+            timeout=15,
         )
         if r.status_code == 200:
             d = r.json()
-            if not d.get("status"):
-                return None
-            thumb_url = ""
-            thumbnails = d.get("thumbnails", [])
-            if thumbnails:
-                # Prend la meilleure qualité
-                thumb_url = thumbnails[-1].get("url", "") or thumbnails[0].get("url", "")
-            if not thumb_url:
-                thumb_url = f"https://img.youtube.com/vi/{vid}/hqdefault.jpg"
-            # Proxyfie la miniature
-            if "ytimg.com" in thumb_url or "youtube.com" in thumb_url:
-                thumb_proxied = f"/thumbnail-proxy?url={urllib.parse.quote(thumb_url)}"
-            else:
-                thumb_proxied = thumb_url
+            title = d.get("title", "YouTube Video")
+            # Miniature via proxy
+            raw_thumb = f"https://img.youtube.com/vi/{vid}/hqdefault.jpg"
+            thumb = f"/thumbnail-proxy?url={urllib.parse.quote(raw_thumb)}"
             return {
-                "title":     d.get("title", "YouTube Video"),
-                "duration":  d.get("lengthSeconds", 0),
-                "thumbnail": thumb_proxied,
-                "uploader":  d.get("author", {}).get("title", "YouTube") if isinstance(d.get("author"), dict) else d.get("author", "YouTube"),
+                "title":     title,
+                "duration":  int(d.get("duration", 0) or 0),
+                "thumbnail": thumb,
+                "uploader":  "YouTube",
                 "platform":  "youtube",
-                "_rapidapi_data": d,   # gardé pour le download
             }
     except Exception as e:
-        logger.error(f"YouTube RapidAPI info: {e}")
+        logger.error(f"YouTube RapidAPI info (mp36): {e}")
     return None
 
 
 def _youtube_rapidapi_download(url: str, fmt: str, quality: str) -> tuple:
     """
-    Télécharge une vidéo YouTube via RapidAPI.
-    Retourne (path, title) ou (None, None).
+    Télécharge YouTube via RapidAPI — même logique que l'ancienne version qui marchait.
+    MP3 : youtube-mp36 | MP4 : yt-api puis youtube-mp36 en fallback.
     """
     key = _get_rapidapi_key()
     if not key:
@@ -311,50 +297,71 @@ def _youtube_rapidapi_download(url: str, fmt: str, quality: str) -> tuple:
     vid = _extract_yt_id(url)
     if not vid:
         return None, None
+
     try:
-        r = httpx.get(
-            "https://youtube-media-downloader.p.rapidapi.com/v2/video/details",
-            params={"videoId": vid},
-            headers={
-                "X-RapidAPI-Key":  key,
-                "X-RapidAPI-Host": "youtube-media-downloader.p.rapidapi.com",
-            },
-            timeout=20,
-        )
-        if r.status_code != 200:
-            return None, None
-        d = r.json()
-        if not d.get("status"):
-            return None, None
-        title = d.get("title", "video")
-
         if fmt == "mp3":
-            # Audio uniquement
-            audios = d.get("audios", [])
-            dl_url = audios[0].get("url") if audios else None
-            ext = ".mp3"
+            r = httpx.get(
+                "https://youtube-mp36.p.rapidapi.com/dl",
+                params={"id": vid},
+                headers={
+                    "X-RapidAPI-Key":  key,
+                    "X-RapidAPI-Host": "youtube-mp36.p.rapidapi.com",
+                },
+                timeout=30,
+            )
+            if r.status_code == 200:
+                d = r.json()
+                if d.get("link"):
+                    path = _save_stream(d["link"], d.get("title", "audio"), ".mp3")
+                    return path, d.get("title", "audio")
         else:
-            # Vidéo MP4 — cherche la qualité demandée
-            videos = d.get("videos", [])
-            target_h = int(quality)
-            # Trie par hauteur décroissante, prend la première <= target
-            candidates = [
-                v for v in videos
-                if v.get("extension") == "mp4" and v.get("height", 0) <= target_h
-            ]
-            if not candidates:
-                candidates = [v for v in videos if v.get("extension") == "mp4"]
-            if not candidates:
-                candidates = videos  # dernier recours
-            # Prend la meilleure qualité disponible <= target
-            best = max(candidates, key=lambda v: v.get("height", 0)) if candidates else None
-            dl_url = best.get("url") if best else None
-            ext = ".mp4"
+            # Essai 1 : yt-api (liens directs avec qualité)
+            r = httpx.get(
+                "https://yt-api.p.rapidapi.com/dl",
+                params={"id": vid, "cgeo": "US"},
+                headers={
+                    "X-RapidAPI-Key":  key,
+                    "X-RapidAPI-Host": "yt-api.p.rapidapi.com",
+                },
+                timeout=30,
+            )
+            if r.status_code == 200:
+                d = r.json()
+                title = d.get("title", "video")
+                formats = d.get("formats", []) + d.get("adaptiveFormats", [])
+                target_h = int(quality)
+                mp4s = [
+                    f for f in formats
+                    if f.get("mimeType", "").startswith("video/mp4")
+                    and f.get("url")
+                    and f.get("height", 0) <= target_h
+                ]
+                if not mp4s:
+                    mp4s = [f for f in formats if f.get("mimeType", "").startswith("video/mp4") and f.get("url")]
+                if mp4s:
+                    best = sorted(mp4s, key=lambda x: x.get("height", 0), reverse=True)[0]
+                    dl_url = best["url"]
+                    path = _save_stream(dl_url, title, ".mp4")
+                    return path, title
 
-        if dl_url:
-            logger.info(f"YouTube RapidAPI download: {title} ({fmt} {quality}p)")
-            path = _save_stream(dl_url, title, ext)
-            return path, title
+            # Essai 2 : youtube-mp36 en fallback MP4
+            r2 = httpx.get(
+                "https://youtube-mp36.p.rapidapi.com/dl",
+                params={"id": vid, "format": "mp4"},
+                headers={
+                    "X-RapidAPI-Key":  key,
+                    "X-RapidAPI-Host": "youtube-mp36.p.rapidapi.com",
+                },
+                timeout=30,
+            )
+            if r2.status_code == 200:
+                d2 = r2.json()
+                dl_url = d2.get("link") or d2.get("url")
+                title  = d2.get("title", "video")
+                if dl_url:
+                    path = _save_stream(dl_url, title, ".mp4")
+                    return path, title
+
     except Exception as e:
         logger.error(f"YouTube RapidAPI download: {e}")
     return None, None
