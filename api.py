@@ -322,6 +322,54 @@ def _tiktok_download(url: str, fmt: str):
     return path, title
 
 # ══════════════════════════════════════════════════════════════════════════════
+# INFO helpers
+# ══════════════════════════════════════════════════════════════════════════════
+def _ytstream_info(url: str) -> dict:
+    """Récupère titre + durée via YTStream RapidAPI."""
+    key = _get_rapidapi_key()
+    if not key: raise ValueError("Pas de clé")
+    vid = _extract_yt_id(url)
+    r = httpx.get("https://ytstream-download-youtube-videos.p.rapidapi.com/dl",
+                  params={"id": vid},
+                  headers={"X-RapidAPI-Key": key,
+                           "X-RapidAPI-Host": "ytstream-download-youtube-videos.p.rapidapi.com"},
+                  timeout=20)
+    r.raise_for_status()
+    d = r.json()
+    return {
+        "title":    d.get("title", "Video"),
+        "duration": d.get("lengthSeconds", 0),
+        "thumbnail": (d.get("thumbnail") or {}).get("thumbnails", [{}])[-1].get("url","")
+                     or f"https://img.youtube.com/vi/{vid}/hqdefault.jpg",
+        "uploader": d.get("author", "YouTube"),
+        "platform": "youtube"
+    }
+
+def _ytmedia_info(url: str) -> dict:
+    """Récupère titre + durée via YouTube Media Downloader RapidAPI."""
+    key = _get_rapidapi_key()
+    if not key: raise ValueError("Pas de clé")
+    vid = _extract_yt_id(url)
+    r = httpx.get("https://youtube-media-downloader.p.rapidapi.com/v2/video/details",
+                  params={"videoId": vid},
+                  headers={"X-RapidAPI-Key": key,
+                           "X-RapidAPI-Host": "youtube-media-downloader.p.rapidapi.com"},
+                  timeout=20)
+    r.raise_for_status()
+    d = r.json()
+    thumb = ""
+    thumbs = d.get("thumbnails", [])
+    if thumbs: thumb = thumbs[-1].get("url","")
+    if not thumb: thumb = f"https://img.youtube.com/vi/{vid}/hqdefault.jpg"
+    return {
+        "title":    d.get("title", "Video"),
+        "duration": d.get("lengthSeconds", 0),
+        "thumbnail": thumb,
+        "uploader": d.get("author", "YouTube"),
+        "platform": "youtube"
+    }
+
+# ══════════════════════════════════════════════════════════════════════════════
 # INFO endpoint
 # ══════════════════════════════════════════════════════════════════════════════
 @app.get("/info", dependencies=SECURITY)
@@ -332,26 +380,107 @@ async def get_info(url: str):
     if platform == "unknown":
         raise HTTPException(status_code=400, detail="Plateforme non supportee")
 
+    # ── YouTube : essai yt-dlp, puis YTStream, puis YTMedia ──────────────────
+    if platform == "youtube":
+        # 1) yt-dlp (rapide si Railway ne bloque pas)
+        opts = {"quiet":True,"no_warnings":True,"skip_download":True,"noplaylist":True}
+        if PROXY_URL: opts["proxy"] = PROXY_URL
+        try:
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                info = ydl.extract_info(url, download=False)
+            thumb = info.get("thumbnail","")
+            if not thumb:
+                thumb = f"https://img.youtube.com/vi/{_extract_yt_id(url)}/hqdefault.jpg"
+            title = info.get("title","")
+            if title and title.lower() not in ("youtube","video",""):
+                logger.info(f"yt-dlp info OK: {title}")
+                return {"title":title,"duration":info.get("duration",0),
+                        "thumbnail":thumb,"uploader":info.get("uploader","YouTube"),
+                        "platform":platform}
+        except Exception as e:
+            logger.warning(f"yt-dlp info failed: {e}")
+
+        # 2) YTStream RapidAPI
+        try:
+            result = _ytstream_info(url)
+            logger.info(f"YTStream info OK: {result['title']}")
+            return result
+        except Exception as e:
+            logger.warning(f"YTStream info failed: {e}")
+
+        # 3) YouTube Media Downloader
+        try:
+            result = _ytmedia_info(url)
+            logger.info(f"YTMedia info OK: {result['title']}")
+            return result
+        except Exception as e:
+            logger.warning(f"YTMedia info failed: {e}")
+
+        # 4) Fallback minimal — au moins la miniature
+        vid = _extract_yt_id(url)
+        return {"title":"Vidéo YouTube","duration":0,
+                "thumbnail":f"https://img.youtube.com/vi/{vid}/hqdefault.jpg",
+                "uploader":"YouTube","platform":platform}
+
+    # ── TikTok ────────────────────────────────────────────────────────────────
     opts = {"quiet":True,"no_warnings":True,"skip_download":True,"noplaylist":True}
     if PROXY_URL: opts["proxy"] = PROXY_URL
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(url, download=False)
         thumb = info.get("thumbnail","")
-        if platform == "youtube" and not thumb:
-            thumb = f"https://img.youtube.com/vi/{_extract_yt_id(url)}/hqdefault.jpg"
-        return {"title": info.get("title","Video"), "duration": info.get("duration",0),
-                "thumbnail": thumb, "uploader": info.get("uploader",""), "platform": platform}
+        if not thumb:
+            thumbs = info.get("thumbnails",[])
+            if thumbs: thumb = thumbs[-1].get("url","")
+        return {"title":info.get("title","TikTok"),"duration":info.get("duration",0),
+                "thumbnail":thumb,"uploader":info.get("uploader",""),"platform":platform}
     except Exception as e:
-        logger.warning(f"yt-dlp info failed: {e}")
-
-    if platform == "youtube":
-        vid = _extract_yt_id(url)
-        return {"title":"YouTube","duration":0,
-                "thumbnail":f"https://img.youtube.com/vi/{vid}/hqdefault.jpg",
-                "uploader":"YouTube","platform":platform}
+        logger.warning(f"yt-dlp TikTok info failed: {e}")
 
     raise HTTPException(status_code=400, detail="Impossible d'analyser ce lien")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# DEBUG endpoint (à supprimer après que tout marche)
+# ══════════════════════════════════════════════════════════════════════════════
+@app.get("/debug-yt")
+async def debug_yt(url: str = "https://youtu.be/dQw4w9WgXcQ"):
+    url = clean_url(validate_url(url))
+    vid = _extract_yt_id(url)
+    key = _get_rapidapi_key()
+    results = {"vid": vid, "has_key": bool(key), "ffmpeg": FFMPEG_OK}
+
+    # Test YTStream
+    try:
+        r = httpx.get("https://ytstream-download-youtube-videos.p.rapidapi.com/dl",
+                      params={"id": vid},
+                      headers={"X-RapidAPI-Key": key or "",
+                               "X-RapidAPI-Host": "ytstream-download-youtube-videos.p.rapidapi.com"},
+                      timeout=15)
+        results["ytstream_status"] = r.status_code
+        if r.status_code == 200:
+            d = r.json()
+            results["ytstream_title"] = d.get("title","?")
+            results["ytstream_formats"] = list((d.get("formats") or {}).keys())
+    except Exception as e:
+        results["ytstream_error"] = str(e)
+
+    # Test YTMedia
+    try:
+        r2 = httpx.get("https://youtube-media-downloader.p.rapidapi.com/v2/video/details",
+                       params={"videoId": vid},
+                       headers={"X-RapidAPI-Key": key or "",
+                                "X-RapidAPI-Host": "youtube-media-downloader.p.rapidapi.com"},
+                       timeout=15)
+        results["ytmedia_status"] = r2.status_code
+        if r2.status_code == 200:
+            d2 = r2.json()
+            results["ytmedia_title"] = d2.get("title","?")
+            results["ytmedia_video_count"] = len(d2.get("videos",[]))
+    except Exception as e:
+        results["ytmedia_error"] = str(e)
+
+    return results
 
 # ══════════════════════════════════════════════════════════════════════════════
 # DOWNLOAD endpoint
