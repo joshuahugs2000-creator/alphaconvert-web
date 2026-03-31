@@ -173,15 +173,7 @@ async def download(url: str, format: str = "mp4", quality: str = "720"):
                         link = d.get("link")
                         if link:
                             title = sanitize_filename(d.get("title", "audio"))
-                            async with client.stream("GET", link) as stream:
-                                headers = {
-                                    "Content-Disposition": f'attachment; filename="{title}.mp3"',
-                                    "Content-Type": "audio/mpeg",
-                                }
-                                cl = stream.headers.get("content-length")
-                                if cl:
-                                    headers["Content-Length"] = cl
-                                return StreamingResponse(stream.aiter_bytes(32768), headers=headers)
+                            return RedirectResponse(url=link, status_code=302)
 
                 else:
                     # MP4 : yt-api → on récupère l'URL directe et on stream
@@ -215,15 +207,8 @@ async def download(url: str, format: str = "mp4", quality: str = "720"):
                             dl_url = best["url"]
                             title = sanitize_filename(d.get("title", "video"))
                             logger.info(f"YT MP4 stream: {best.get('height')}p")
-                            async with client.stream("GET", dl_url) as stream:
-                                headers = {
-                                    "Content-Disposition": f'attachment; filename="{title}.mp4"',
-                                    "Content-Type": "video/mp4",
-                                }
-                                cl = stream.headers.get("content-length")
-                                if cl:
-                                    headers["Content-Length"] = cl
-                                return StreamingResponse(stream.aiter_bytes(65536), headers=headers)
+                            # Use redirect instead of proxying to avoid 0-byte downloads
+                            return RedirectResponse(url=dl_url, status_code=302)
 
                     # Fallback youtube-mp36 (MP4 limité mais fonctionne)
                     logger.warning("yt-api MP4 failed, fallback youtube-mp36")
@@ -237,15 +222,7 @@ async def download(url: str, format: str = "mp4", quality: str = "720"):
                         link = d2.get("link")
                         if link:
                             title = sanitize_filename(d2.get("title", "video"))
-                            async with client.stream("GET", link) as stream:
-                                headers = {
-                                    "Content-Disposition": f'attachment; filename="{title}.mp4"',
-                                    "Content-Type": "video/mp4",
-                                }
-                                cl = stream.headers.get("content-length")
-                                if cl:
-                                    headers["Content-Length"] = cl
-                                return StreamingResponse(stream.aiter_bytes(32768), headers=headers)
+                            return RedirectResponse(url=link, status_code=302)
 
             elif platform == "tiktok":
                 resolved = await resolve_short_url(url)
@@ -266,15 +243,7 @@ async def download(url: str, format: str = "mp4", quality: str = "720"):
                         ctype, ext = "video/mp4", "mp4"
 
                     if dl_url:
-                        async with client.stream("GET", dl_url, headers={"User-Agent": "Mozilla/5.0"}) as stream:
-                            headers = {
-                                "Content-Disposition": f'attachment; filename="{title}.{ext}"',
-                                "Content-Type": ctype,
-                            }
-                            cl = stream.headers.get("content-length")
-                            if cl:
-                                headers["Content-Length"] = cl
-                            return StreamingResponse(stream.aiter_bytes(65536), headers=headers)
+                        return RedirectResponse(url=dl_url, status_code=302)
                 else:
                     logger.error(f"TikTok download {r.status_code}: {r.text[:200]}")
 
