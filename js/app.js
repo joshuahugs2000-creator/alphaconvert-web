@@ -127,42 +127,34 @@ async function checkSavedPremium() {
 // ── DOWNLOAD LIMIT ────────────────────────────────────────────
 async function canDownload() {
   if (isPremium) return { allowed: true };
-  const cid = await getClientId();
   const today = todayKey();
-  const ref = doc(db, 'limits', `${cid}_${today}`);
-  try {
-    const snap = await getDoc(ref);
-    if (!snap.exists()) return { allowed: true, count: 0 };
-    const count = snap.data().count || 0;
-    if (count >= DAILY_LIMIT) return { allowed: false, count };
-    return { allowed: true, count };
-  } catch { return { allowed: true, count: 0 }; }
+  const stored = JSON.parse(localStorage.getItem('dlCount') || '{}');
+  const count = (stored.date === today) ? (stored.count || 0) : 0;
+  if (count >= DAILY_LIMIT) return { allowed: false, count };
+  return { allowed: true, count };
 }
 
 async function recordDownload() {
   if (isPremium) return;
-  const cid = await getClientId();
   const today = todayKey();
-  const ref = doc(db, 'limits', `${cid}_${today}`);
-  try {
-    const snap = await getDoc(ref);
-    if (!snap.exists()) {
-      await setDoc(ref, { count: 1, clientId: cid, date: today });
-    } else {
-      await updateDoc(ref, { count: increment(1) });
-    }
-  } catch {}
+  const stored = JSON.parse(localStorage.getItem('dlCount') || '{}');
+  const count = (stored.date === today) ? (stored.count || 0) : 0;
+  localStorage.setItem('dlCount', JSON.stringify({ date: today, count: count + 1 }));
+  // Firebase en arrière-plan pour anti-abus multi-navigateurs
+  getClientId().then(cid => {
+    const ref = doc(db, 'limits', `${cid}_${today}`);
+    getDoc(ref).then(snap => {
+      if (!snap.exists()) setDoc(ref, { count: count + 1, clientId: cid, date: today });
+      else updateDoc(ref, { count: increment(1) });
+    }).catch(() => {});
+  }).catch(() => {});
 }
 
-async function getDownloadCount() {
+function getDownloadCount() {
   if (isPremium) return 0;
-  const cid = await getClientId();
   const today = todayKey();
-  const ref = doc(db, 'limits', `${cid}_${today}`);
-  try {
-    const snap = await getDoc(ref);
-    return snap.exists() ? (snap.data().count || 0) : 0;
-  } catch { return 0; }
+  const stored = JSON.parse(localStorage.getItem('dlCount') || '{}');
+  return (stored.date === today) ? (stored.count || 0) : 0;
 }
 
 // ── UI PREMIUM BADGE ─────────────────────────────────────────
@@ -176,16 +168,19 @@ function updatePremiumBadge() {
     badge.innerHTML = `⭐ Premium actif — expire le ${exp}`;
     badge.style.color = '#f59e0b';
     badge.style.display = 'block';
-    counter.style.display = 'none';
-  } else {
-    badge.style.display = 'none';
-    getDownloadCount().then(count => {
-      const left = DAILY_LIMIT - count;
-      counter.textContent = `${left} téléchargement${left > 1 ? 's' : ''} gratuit${left > 1 ? 's' : ''} restant aujourd'hui`;
-      counter.style.color = left <= 1 ? '#ef4444' : '#6b7280';
-      counter.style.display = 'block';
-    });
+    counter.style.display = 'none'; // toujours caché si premium
+    return; // stop ici, ne jamais aller plus loin
   }
+
+  badge.style.display = 'none';
+  // Compteur local uniquement — pas de Firebase
+  const today = todayKey();
+  const stored = JSON.parse(localStorage.getItem('dlCount') || '{}');
+  const count = (stored.date === today) ? (stored.count || 0) : 0;
+  const left = Math.max(0, DAILY_LIMIT - count);
+  counter.textContent = `${left} téléchargement${left > 1 ? 's' : ''} gratuit${left > 1 ? 's' : ''} restant aujourd'hui`;
+  counter.style.color = left <= 1 ? '#ef4444' : '#6b7280';
+  counter.style.display = 'block';
 }
 
 // ── TABS ─────────────────────────────────────────────────────
