@@ -310,84 +310,21 @@ def _youtube_rapidapi_info(url: str) -> dict | None:
     return None
 
 
-# ── COBALT.TOOLS — API publique gratuite, sans clé ────────────────────────────
-# cobalt fait le téléchargement sur SES serveurs → pas d'IP-lock YouTube
-COBALT_INSTANCES = [
-    "https://cobalt.api.lostless.de",
-    "https://co.wuk.sh",
-    "https://cobalt-api.kwiatekmiki.com",
-]
+# ── YOUTUBE DOWNLOAD — APIS QUI HÉBERGENT SUR LEUR PROPRE CDN ───────────────
+#
+# Problème fondamental : yt-api et yt-dlp retournent des URLs googlevideo.com
+# signées avec l'IP des LEURS serveurs. Railway ne peut pas les télécharger.
+# Solution : utiliser uniquement des APIs qui hébergent le fichier sur leur CDN.
+#
+# Ordre de priorité :
+#   1. social-media-video-downloader (CDN propre)
+#   2. all-in-one-social-media-downloader (CDN propre)
+#   3. youtube-mp36 (MP3 + MP4 via leur CDN)
 
-def _youtube_cobalt_download(url: str, fmt: str, quality: str) -> tuple:
+def _youtube_cdn_download(url: str, fmt: str, quality: str) -> tuple:
     """
-    Télécharge via cobalt.tools (API publique, gratuite, sans clé).
-    cobalt gère le download sur ses propres serveurs → bypass IP-lock Railway.
-    """
-    vid = _extract_yt_id(url)
-    q_map = {"1080": "1080", "720": "720", "480": "480", "360": "360"}
-    vq = q_map.get(quality, "720")
-
-    payload = {
-        "url":       f"https://www.youtube.com/watch?v={vid}",
-        "vCodec":    "h264",
-        "vQuality":  vq,
-        "aFormat":   "mp3" if fmt == "mp3" else "best",
-        "isAudioOnly": fmt == "mp3",
-    }
-    headers = {
-        "Accept":       "application/json",
-        "Content-Type": "application/json",
-        "User-Agent":   "Mozilla/5.0",
-    }
-
-    for instance in COBALT_INSTANCES:
-        try:
-            r = httpx.post(
-                f"{instance}/api/json",
-                json=payload,
-                headers=headers,
-                timeout=20,
-            )
-            logger.info(f"cobalt {instance} → HTTP {r.status_code}")
-            if r.status_code != 200:
-                continue
-            data = r.json()
-            status = data.get("status")
-
-            if status == "stream" and data.get("url"):
-                dl_url = data["url"]
-                ext    = ".mp3" if fmt == "mp3" else ".mp4"
-                title  = data.get("filename", "video").replace(ext, "")
-                path   = _save_stream(dl_url, title, ext)
-                return path, title
-
-            if status == "redirect" and data.get("url"):
-                dl_url = data["url"]
-                ext    = ".mp3" if fmt == "mp3" else ".mp4"
-                title  = "video"
-                path   = _save_stream(dl_url, title, ext)
-                return path, title
-
-            if status == "tunnel" and data.get("url"):
-                dl_url = data["url"]
-                ext    = ".mp3" if fmt == "mp3" else ".mp4"
-                title  = data.get("filename", "video").replace(ext, "")
-                path   = _save_stream(dl_url, title, ext)
-                return path, title
-
-            logger.warning(f"cobalt {instance} status={status}: {data}")
-
-        except Exception as e:
-            logger.warning(f"cobalt {instance} failed: {e}")
-            continue
-
-    return None, None
-
-
-def _youtube_rapidapi_download(url: str, fmt: str, quality: str) -> tuple:
-    """
-    Télécharge YouTube via RapidAPI — même logique que l'ancienne version qui marchait.
-    MP3 : youtube-mp36 | MP4 : yt-api puis youtube-mp36 en fallback.
+    Télécharge YouTube via des APIs RapidAPI qui hébergent sur leur propre CDN
+    (pas de googlevideo → pas d'IP-lock → fonctionne depuis Railway).
     """
     key = _get_rapidapi_key()
     if not key:
@@ -396,74 +333,149 @@ def _youtube_rapidapi_download(url: str, fmt: str, quality: str) -> tuple:
     if not vid:
         return None, None
 
+    yt_url = f"https://www.youtube.com/watch?v={vid}"
+
+    # ── API 1 : social-media-video-downloader ─────────────────────────────────
     try:
-        if fmt == "mp3":
-            r = httpx.get(
-                "https://youtube-mp36.p.rapidapi.com/dl",
-                params={"id": vid},
-                headers={
-                    "X-RapidAPI-Key":  key,
-                    "X-RapidAPI-Host": "youtube-mp36.p.rapidapi.com",
-                },
-                timeout=30,
-            )
-            if r.status_code == 200:
-                d = r.json()
-                if d.get("link"):
-                    path = _save_stream(d["link"], d.get("title", "audio"), ".mp3")
-                    return path, d.get("title", "audio")
-        else:
-            # Essai 1 : yt-api (liens directs avec qualité)
-            r = httpx.get(
-                "https://yt-api.p.rapidapi.com/dl",
-                params={"id": vid, "cgeo": "US"},
-                headers={
-                    "X-RapidAPI-Key":  key,
-                    "X-RapidAPI-Host": "yt-api.p.rapidapi.com",
-                },
-                timeout=30,
-            )
-            if r.status_code == 200:
-                d = r.json()
-                title = d.get("title", "video")
-                formats = d.get("formats", []) + d.get("adaptiveFormats", [])
+        r = httpx.get(
+            "https://social-media-video-downloader.p.rapidapi.com/smvd/get/all",
+            params={"url": yt_url},
+            headers={
+                "X-RapidAPI-Key":  key,
+                "X-RapidAPI-Host": "social-media-video-downloader.p.rapidapi.com",
+            },
+            timeout=20,
+        )
+        logger.info(f"social-media-video-downloader → {r.status_code}")
+        if r.status_code == 200:
+            data  = r.json()
+            title = data.get("title", "video")
+            links = data.get("links", [])
+            if fmt == "mp3":
+                audios = [l for l in links if l.get("quality") in ("mp3", "audio") and l.get("link")]
+                if audios:
+                    path = _save_stream(audios[0]["link"], title, ".mp3")
+                    return path, title
+            else:
                 target_h = int(quality)
                 mp4s = [
-                    f for f in formats
-                    if f.get("mimeType", "").startswith("video/mp4")
-                    and f.get("url")
-                    and f.get("height", 0) <= target_h
+                    l for l in links
+                    if l.get("link")
+                    and str(l.get("quality", "")).replace("p", "").isdigit()
+                    and int(str(l.get("quality", "0")).replace("p", "")) <= target_h
                 ]
                 if not mp4s:
-                    mp4s = [f for f in formats if f.get("mimeType", "").startswith("video/mp4") and f.get("url")]
+                    mp4s = [l for l in links if l.get("link") and "mp4" in str(l.get("quality", "")).lower()]
                 if mp4s:
-                    best = sorted(mp4s, key=lambda x: x.get("height", 0), reverse=True)[0]
-                    dl_url = best["url"]
-                    path = _save_stream(dl_url, title, ".mp4")
+                    best = sorted(
+                        mp4s,
+                        key=lambda x: int(str(x.get("quality", "0")).replace("p", "") or 0),
+                        reverse=True
+                    )[0]
+                    path = _save_stream(best["link"], title, ".mp4")
                     return path, title
+    except Exception as e:
+        logger.warning(f"social-media-video-downloader failed: {e}")
 
-            # Essai 2 : youtube-mp36 en fallback MP4
-            r2 = httpx.get(
-                "https://youtube-mp36.p.rapidapi.com/dl",
-                params={"id": vid, "format": "mp4"},
-                headers={
-                    "X-RapidAPI-Key":  key,
-                    "X-RapidAPI-Host": "youtube-mp36.p.rapidapi.com",
-                },
-                timeout=30,
-            )
-            if r2.status_code == 200:
-                d2 = r2.json()
-                dl_url = d2.get("link") or d2.get("url")
-                title  = d2.get("title", "video")
-                if dl_url:
-                    path = _save_stream(dl_url, title, ".mp4")
-                    return path, title
+    # ── API 2 : download-all-in-one-lite (manhgdev) ──────────────────────────
+    # Structure réelle de la réponse YouTube :
+    # - type: "video" | "audio"
+    # - ext:  "mp4" | "webm" | "m4a" | "opus"
+    # - height: int (vidéo seulement)
+    # - audioQuality: non-null UNIQUEMENT pour le format muxé (formatId 18, 360p)
+    # - quality: "mp4 (360p)", "m4a (130kb/s)", etc.
+    try:
+        r2 = httpx.get(
+            "https://download-all-in-one-lite.p.rapidapi.com/",
+            params={"url": yt_url},
+            headers={
+                "X-RapidAPI-Key":  key,
+                "X-RapidAPI-Host": "download-all-in-one-lite.p.rapidapi.com",
+            },
+            timeout=20,
+        )
+        logger.info(f"download-all-in-one-lite → {r2.status_code}")
+        if r2.status_code == 200:
+            data2  = r2.json()
+            title2 = data2.get("title", "video")
+            medias = data2.get("medias", [])
+
+            if fmt == "mp3":
+                # Prendre le m4a à 130kb/s (meilleure qualité audio dispo)
+                audios = [
+                    m for m in medias
+                    if m.get("type") == "audio"
+                    and m.get("ext") in ("m4a", "opus")
+                    and m.get("url")
+                ]
+                if audios:
+                    # Trier par bitrate décroissant
+                    best_audio = sorted(
+                        audios,
+                        key=lambda x: x.get("bitrate", 0),
+                        reverse=True
+                    )[0]
+                    path = _save_stream(best_audio["url"], title2, ".mp3")
+                    return path, title2
+
+            else:
+                target_h = int(quality)
+                # Priorité 1 : format muxé MP4 (vidéo+audio, formatId=18, 360p)
+                muxed = [
+                    m for m in medias
+                    if m.get("ext") == "mp4"
+                    and m.get("type") == "video"
+                    and m.get("audioQuality")   # non-null = muxé
+                    and m.get("url")
+                    and (m.get("height") or 0) <= target_h
+                ]
+                if muxed:
+                    best_muxed = sorted(muxed, key=lambda x: x.get("height", 0), reverse=True)[0]
+                    path = _save_stream(best_muxed["url"], title2, ".mp4")
+                    return path, title2
+
+                # Priorité 2 : meilleur MP4 vidéo seule (pas de son, mais mieux que rien)
+                mp4_only = [
+                    m for m in medias
+                    if m.get("ext") == "mp4"
+                    and m.get("type") == "video"
+                    and m.get("url")
+                    and (m.get("height") or 0) <= target_h
+                ]
+                if not mp4_only:
+                    mp4_only = [m for m in medias if m.get("ext") == "mp4" and m.get("url")]
+                if mp4_only:
+                    best_mp4 = sorted(mp4_only, key=lambda x: x.get("height", 0), reverse=True)[0]
+                    path = _save_stream(best_mp4["url"], title2, ".mp4")
+                    return path, title2
 
     except Exception as e:
-        logger.error(f"YouTube RapidAPI download: {e}")
-    return None, None
+        logger.warning(f"download-all-in-one-lite failed: {e}")
 
+    # ── API 3 : youtube-mp36 (CDN propre, fiable pour MP3 et MP4 basique) ──────
+    try:
+        r3 = httpx.get(
+            "https://youtube-mp36.p.rapidapi.com/dl",
+            params={"id": vid},
+            headers={
+                "X-RapidAPI-Key":  key,
+                "X-RapidAPI-Host": "youtube-mp36.p.rapidapi.com",
+            },
+            timeout=30,
+        )
+        logger.info(f"youtube-mp36 → {r3.status_code}")
+        if r3.status_code == 200:
+            d3    = r3.json()
+            title3 = d3.get("title", "video")
+            link3  = d3.get("link")
+            if link3:
+                ext   = ".mp3" if fmt == "mp3" else ".mp4"
+                path  = _save_stream(link3, title3, ext)
+                return path, title3
+    except Exception as e:
+        logger.warning(f"youtube-mp36 failed: {e}")
+
+    return None, None
 
 # ── THUMBNAIL PROXY ───────────────────────────────────────────────────────────
 @app.get("/thumbnail-proxy")
@@ -638,14 +650,9 @@ async def download(url: str, format: str = "mp4", quality: str = "720"):
 
     # Fallback RapidAPI selon la plateforme
     if platform == "youtube":
-        # Essai 2 : cobalt.tools (API publique, pas d'IP-lock, sans clé)
-        logger.info("yt-dlp failed → trying cobalt.tools")
-        path, title = _youtube_cobalt_download(url, format, quality)
-        if path and os.path.exists(path):
-            return _serve(path, title)
-        # Essai 3 : RapidAPI (yt-api + mp36)
-        logger.info("cobalt failed → trying RapidAPI")
-        path, title = _youtube_rapidapi_download(url, format, quality)
+        # Essai 2 : APIs CDN propre (social-media-dl, all-in-one, mp36)
+        logger.info("yt-dlp failed → trying CDN APIs")
+        path, title = _youtube_cdn_download(url, format, quality)
         if path and os.path.exists(path):
             return _serve(path, title)
 
