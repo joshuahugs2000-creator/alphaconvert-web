@@ -171,14 +171,26 @@ def _extract_yt_id(url: str) -> str:
     return m.group(1) if m else ""
 
 def _ydl_base(uid: str) -> dict:
-    """Options yt-dlp de base — SANS proxy."""
+    """Options yt-dlp de base — client Android pour bypasser le bot-detection Railway."""
     opts = {
-        "outtmpl":          os.path.join(DOWNLOAD_PATH, f"{uid}.%(ext)s"),
-        "quiet":            True,
-        "no_warnings":      True,
-        "noplaylist":       True,
+        "outtmpl":           os.path.join(DOWNLOAD_PATH, f"{uid}.%(ext)s"),
+        "quiet":             True,
+        "no_warnings":       True,
+        "noplaylist":        True,
         "restrictfilenames": False,
-        "proxy":            "",   # Force aucun proxy — clé pour Railway
+        "proxy":             "",      # Force aucun proxy — clé pour Railway
+        # Client Android : YouTube traite ça comme une app mobile → pas de bot-check
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["android", "web"],
+            }
+        },
+        "http_headers": {
+            "User-Agent": (
+                "com.google.android.youtube/17.36.4 "
+                "(Linux; U; Android 12; GB) gzip"
+            ),
+        },
     }
     if FFMPEG_OK:
         opts["ffmpeg_location"] = FFMPEG_PATH
@@ -296,6 +308,79 @@ def _youtube_rapidapi_info(url: str) -> dict | None:
     except Exception as e:
         logger.error(f"YouTube RapidAPI info (mp36): {e}")
     return None
+
+
+INVIDIOUS_INSTANCES = [
+    "https://invidious.privacydev.net",
+    "https://inv.tux.pizza",
+    "https://invidious.nerdvpn.de",
+    "https://yt.cdaut.de",
+]
+
+def _youtube_invidious_download(url: str, fmt: str, quality: str) -> tuple:
+    """
+    Fallback gratuit via Invidious (pas de clé API requise).
+    Invidious est un front-end YouTube open-source qui expose une API publique.
+    """
+    vid = _extract_yt_id(url)
+    if not vid:
+        return None, None
+
+    target_h = int(quality)
+
+    for instance in INVIDIOUS_INSTANCES:
+        try:
+            r = httpx.get(
+                f"{instance}/api/v1/videos/{vid}",
+                timeout=15,
+                headers={"User-Agent": "Mozilla/5.0"},
+            )
+            if r.status_code != 200:
+                continue
+            data = r.json()
+            title = data.get("title", "video")
+
+            if fmt == "mp3":
+                # Prendre le meilleur audio
+                audios = [
+                    f for f in data.get("adaptiveFormats", [])
+                    if f.get("type", "").startswith("audio/mp4")
+                    and f.get("url")
+                ]
+                if not audios:
+                    audios = [f for f in data.get("adaptiveFormats", [])
+                              if "audio" in f.get("type", "") and f.get("url")]
+                if audios:
+                    best = sorted(audios, key=lambda x: x.get("bitrate", 0), reverse=True)[0]
+                    path = _save_stream(best["url"], title, ".mp3")
+                    return path, title
+            else:
+                # MP4 : formats progressifs (vidéo + audio muxés)
+                mp4s = [
+                    f for f in data.get("formatStreams", [])
+                    if "video/mp4" in f.get("type", "")
+                    and f.get("url")
+                    and f.get("resolution", "").replace("p", "").isdigit()
+                    and int(f["resolution"].replace("p", "")) <= target_h
+                ]
+                if not mp4s:
+                    mp4s = [f for f in data.get("formatStreams", [])
+                            if "video/mp4" in f.get("type", "") and f.get("url")]
+                if mp4s:
+                    best = sorted(
+                        mp4s,
+                        key=lambda x: int(x.get("resolution", "0p").replace("p", "") or 0),
+                        reverse=True
+                    )[0]
+                    path = _save_stream(best["url"], title, ".mp4")
+                    return path, title
+
+            logger.warning(f"Invidious {instance}: aucun format trouvé pour {vid}")
+        except Exception as e:
+            logger.warning(f"Invidious {instance} failed: {e}")
+            continue
+
+    return None, None
 
 
 def _youtube_rapidapi_download(url: str, fmt: str, quality: str) -> tuple:
@@ -552,7 +637,13 @@ async def download(url: str, format: str = "mp4", quality: str = "720"):
 
     # Fallback RapidAPI selon la plateforme
     if platform == "youtube":
+        # Essai 2 : RapidAPI
         path, title = _youtube_rapidapi_download(url, format, quality)
+        if path and os.path.exists(path):
+            return _serve(path, title)
+        # Essai 3 : Invidious (gratuit, sans clé)
+        logger.info("RapidAPI failed → trying Invidious fallback")
+        path, title = _youtube_invidious_download(url, format, quality)
         if path and os.path.exists(path):
             return _serve(path, title)
 
