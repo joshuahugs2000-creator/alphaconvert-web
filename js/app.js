@@ -21,146 +21,120 @@ const firebaseConfig = {
   appId: "1:599445275974:web:9c19afd3c4f8219e3f9147"
 };
 const fbApp = initializeApp(firebaseConfig);
-const db = getFirestore(fbApp);
-const auth = getAuth(fbApp);
+const db    = getFirestore(fbApp);
+const auth  = getAuth(fbApp);
 
 // ── FINGERPRINT (fallback sans compte) ───────────────────────
 function getFingerprint() {
   const raw = [
-    navigator.userAgent,
-    navigator.language,
-    screen.width + 'x' + screen.height,
-    screen.colorDepth,
+    navigator.userAgent, navigator.language,
+    screen.width + 'x' + screen.height, screen.colorDepth,
     new Date().getTimezoneOffset(),
-    navigator.hardwareConcurrency || '',
-    navigator.platform || ''
+    navigator.hardwareConcurrency || '', navigator.platform || ''
   ].join('|');
-  let hash = 0;
-  for (let i = 0; i < raw.length; i++) {
-    hash = ((hash << 5) - hash) + raw.charCodeAt(i);
-    hash |= 0;
-  }
-  return Math.abs(hash).toString(36);
+  let h = 0;
+  for (let i = 0; i < raw.length; i++) { h = ((h << 5) - h) + raw.charCodeAt(i); h |= 0; }
+  return Math.abs(h).toString(36);
 }
 
 async function getIP() {
-  try {
-    const r = await fetch('https://api.ipify.org?format=json');
-    const d = await r.json();
-    return d.ip || 'unknown';
-  } catch { return 'unknown'; }
+  try { const r = await fetch('https://api.ipify.org?format=json'); return (await r.json()).ip || 'unknown'; }
+  catch { return 'unknown'; }
 }
 
-let clientId = null;
+let _clientId = null;
 async function getClientId() {
-  // Si connecté avec Google → utiliser l'UID Firebase (stable sur tous les appareils)
   const user = auth.currentUser;
   if (user) return `user_${user.uid}`;
-  // Sinon fallback fingerprint+IP
-  if (clientId) return clientId;
-  const fp = getFingerprint();
-  const ip = await getIP();
-  clientId = `${fp}_${ip.replace(/\./g, '-')}`;
-  return clientId;
+  if (_clientId) return _clientId;
+  _clientId = `${getFingerprint()}_${(await getIP()).replace(/\./g, '-')}`;
+  return _clientId;
 }
 
-// ── TODAY KEY ─────────────────────────────────────────────────
-function todayKey() {
-  return new Date().toISOString().split('T')[0];
-}
+function todayKey() { return new Date().toISOString().split('T')[0]; }
 
 // ── PREMIUM ───────────────────────────────────────────────────
-let isPremium = false;
+let isPremium    = false;
 let premiumExpiry = null;
 
-// Vérifie le premium depuis Firebase (lié au compte Google)
+// Vérification au démarrage : compte Firebase en priorité, localStorage en fallback
 async function checkPremiumStatus() {
+  isPremium = false;
+  premiumExpiry = null;
+
   const user = auth.currentUser;
-  if (!user) {
-    // Sans compte : vérifier seulement le localStorage (code activé en anonyme)
-    return checkLocalPremium();
-  }
 
-  try {
-    const userRef = doc(db, 'users', user.uid);
-    const snap = await getDoc(userRef);
-    if (snap.exists()) {
-      const data = snap.data();
-      const isActive = data.premiumStatus === 'active';
-      const isUnlimited = data.unlimited === true;
-      const notExpired = isUnlimited || !data.premiumExpiry || new Date(data.premiumExpiry) > new Date();
-      if (isActive && notExpired) {
-        isPremium = true;
-        premiumExpiry = isUnlimited ? null : data.premiumExpiry;
-        return true;
+  // 1. Compte connecté → vérifier users/{uid} dans Firebase
+  if (user) {
+    try {
+      const snap = await getDoc(doc(db, 'users', user.uid));
+      if (snap.exists()) {
+        const d = snap.data();
+        const active    = d.premiumStatus === 'active';
+        const unlimited = d.unlimited === true;
+        const valid     = unlimited || !d.premiumExpiry || new Date(d.premiumExpiry) > new Date();
+        if (active && valid) {
+          isPremium     = true;
+          premiumExpiry = unlimited ? null : d.premiumExpiry;
+          return true;
+        }
       }
-    }
-  } catch (e) {
-    // Firebase indispo → fallback localStorage
-    return checkLocalPremium();
+    } catch { /* Firebase indispo → continuer vers localStorage */ }
   }
 
-  // Aussi vérifier localStorage au cas où code activé avant connexion
-  return checkLocalPremium();
-}
-
-function checkLocalPremium() {
-  const expiry = localStorage.getItem('premiumExpiry');
-  if (!expiry) return false;
-  if (new Date(expiry) < new Date()) {
-    localStorage.removeItem('premiumCode');
-    localStorage.removeItem('premiumExpiry');
-    return false;
+  // 2. Fallback localStorage (code activé sans compte ou Firebase down)
+  const exp = localStorage.getItem('premiumExpiry');
+  if (exp && new Date(exp) > new Date()) {
+    isPremium     = true;
+    premiumExpiry = exp;
+    return true;
   }
-  isPremium = true;
-  premiumExpiry = expiry;
-  return true;
+  // Nettoyer si expiré
+  localStorage.removeItem('premiumCode');
+  localStorage.removeItem('premiumExpiry');
+  return false;
 }
 
 // Activation d'un code premium
 async function checkPremiumCode(code) {
   const upper = code.toUpperCase().trim();
-
   try {
-    const ref = doc(db, 'premiumCodes', upper);
+    const ref  = doc(db, 'premiumCodes', upper);
     const snap = await getDoc(ref);
-    if (!snap.exists()) return { valid: false, msg: '❌ Code invalide.' };
+    if (!snap.exists())     return { valid: false, msg: '❌ Code invalide.' };
+    const d = snap.data();
+    if (d.revoked)          return { valid: false, msg: '❌ Ce code a été révoqué.' };
+    const unlimited = d.unlimited === true;
+    if (!unlimited && new Date(d.expiresAt) < new Date())
+                            return { valid: false, msg: '❌ Ce code est expiré.' };
 
-    const data = snap.data();
-    if (data.revoked) return { valid: false, msg: '❌ Ce code a été révoqué.' };
-
-    const isUnlimited = data.unlimited === true;
-    const expiry = isUnlimited ? null : new Date(data.expiresAt);
-    if (!isUnlimited && expiry < new Date()) return { valid: false, msg: '❌ Ce code est expiré.' };
-
-    // Marquer le code comme utilisé
-    const user = auth.currentUser;
-    const usedBy = user ? user.uid : await getClientId();
+    // Marquer utilisé
+    const usedBy = auth.currentUser ? auth.currentUser.uid : await getClientId();
     await updateDoc(ref, { used: true, usedBy, usedAt: new Date().toISOString() });
 
-    // Enregistrer le premium sur le compte Firebase si connecté
+    // Enregistrer sur le compte Google si connecté
+    const user = auth.currentUser;
     if (user) {
       await setDoc(doc(db, 'users', user.uid), {
         premiumStatus: 'active',
-        unlimited: isUnlimited,
-        premiumExpiry: isUnlimited ? null : data.expiresAt,
-        premiumLabel: data.label,
-        activatedAt: new Date().toISOString(),
-        activatedCode: upper,
-        email: user.email
+        unlimited,
+        premiumExpiry:  unlimited ? null : d.expiresAt,
+        premiumLabel:   d.label,
+        activatedAt:    new Date().toISOString(),
+        activatedCode:  upper,
+        email:          user.email
       }, { merge: true });
     }
 
-    // Toujours sauvegarder en localStorage aussi (fallback)
-    if (!isUnlimited) {
-      localStorage.setItem('premiumCode', upper);
-      localStorage.setItem('premiumExpiry', data.expiresAt);
+    // localStorage en fallback
+    if (!unlimited) {
+      localStorage.setItem('premiumCode',   upper);
+      localStorage.setItem('premiumExpiry', d.expiresAt);
     }
 
-    isPremium = true;
-    premiumExpiry = isUnlimited ? null : data.expiresAt;
-
-    return { valid: true, expiry: data.expiresAt, label: data.label, unlimited: isUnlimited };
+    isPremium     = true;
+    premiumExpiry = unlimited ? null : d.expiresAt;
+    return { valid: true, expiry: d.expiresAt, label: d.label, unlimited };
   } catch (e) {
     return { valid: false, msg: '❌ Erreur de vérification.' };
   }
@@ -169,55 +143,48 @@ async function checkPremiumCode(code) {
 // ── DOWNLOAD LIMIT ────────────────────────────────────────────
 async function canDownload() {
   if (isPremium) return { allowed: true };
-  const cid = await getClientId();
+  const cid   = await getClientId();
   const today = todayKey();
-  const ref = doc(db, 'limits', `${cid}_${today}`);
+  const ref   = doc(db, 'limits', `${cid}_${today}`);
   try {
-    const snap = await getDoc(ref);
+    const snap  = await getDoc(ref);
     if (!snap.exists()) return { allowed: true, count: 0 };
     const count = snap.data().count || 0;
-    if (count >= DAILY_LIMIT) return { allowed: false, count };
-    return { allowed: true, count };
+    return count >= DAILY_LIMIT ? { allowed: false, count } : { allowed: true, count };
   } catch { return { allowed: true, count: 0 }; }
 }
 
 async function recordDownload() {
   if (isPremium) return;
-  const cid = await getClientId();
+  const cid   = await getClientId();
   const today = todayKey();
-  const ref = doc(db, 'limits', `${cid}_${today}`);
+  const ref   = doc(db, 'limits', `${cid}_${today}`);
   try {
     const snap = await getDoc(ref);
-    if (!snap.exists()) {
-      await setDoc(ref, { count: 1, clientId: cid, date: today });
-    } else {
-      await updateDoc(ref, { count: increment(1) });
-    }
+    if (!snap.exists()) await setDoc(ref, { count: 1, clientId: cid, date: today });
+    else                await updateDoc(ref, { count: increment(1) });
   } catch {}
 }
 
 async function getDownloadCount() {
   if (isPremium) return 0;
   const cid = await getClientId();
-  const today = todayKey();
-  const ref = doc(db, 'limits', `${cid}_${today}`);
-  try {
-    const snap = await getDoc(ref);
-    return snap.exists() ? (snap.data().count || 0) : 0;
-  } catch { return 0; }
+  const ref = doc(db, 'limits', `${cid}_${todayKey()}`);
+  try { const s = await getDoc(ref); return s.exists() ? (s.data().count || 0) : 0; }
+  catch { return 0; }
 }
 
 // ── UI PREMIUM BADGE ─────────────────────────────────────────
 function updatePremiumBadge() {
-  const badge = document.getElementById('premiumBadge');
+  const badge   = document.getElementById('premiumBadge');
   const counter = document.getElementById('dlCounter');
   if (!badge || !counter) return;
 
   if (isPremium) {
     badge.innerHTML = premiumExpiry
-      ? `⭐ Premium actif — expire le ${new Date(premiumExpiry).toLocaleDateString('fr', {day:'2-digit', month:'long', year:'numeric'})}`
+      ? `⭐ Premium actif — expire le ${new Date(premiumExpiry).toLocaleDateString('fr', {day:'2-digit',month:'long',year:'numeric'})}`
       : `⭐ Premium actif`;
-    badge.style.color = '#f59e0b';
+    badge.style.color   = '#f59e0b';
     badge.style.display = 'block';
     counter.style.display = 'none';
   } else {
@@ -225,18 +192,14 @@ function updatePremiumBadge() {
     getDownloadCount().then(count => {
       const left = DAILY_LIMIT - count;
       counter.textContent = `${left} téléchargement${left > 1 ? 's' : ''} gratuit${left > 1 ? 's' : ''} restant aujourd'hui`;
-      counter.style.color = left <= 1 ? '#ef4444' : '#6b7280';
+      counter.style.color   = left <= 1 ? '#ef4444' : '#6b7280';
       counter.style.display = 'block';
     });
   }
 }
 
 // ── TABS ─────────────────────────────────────────────────────
-const tabPlaceholders = {
-  yt: 'Colle ton lien YouTube ici…',
-  tt: 'Colle ton lien TikTok ici…'
-};
-
+const tabPlaceholders = { yt: 'Colle ton lien YouTube ici…', tt: 'Colle ton lien TikTok ici…' };
 const tabFormats = {
   yt: [
     { label: 'MP4 1080p HD', fmt: 'mp4', q: '1080' },
@@ -251,7 +214,6 @@ const tabFormats = {
     { label: 'MP3 Audio', fmt: 'mp3', q: 'best' },
   ]
 };
-
 let currentTab = 'yt';
 
 function switchTab(btn, platform) {
@@ -259,10 +221,7 @@ function switchTab(btn, platform) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   btn.classList.add('active');
   const input = document.getElementById('urlInput');
-  if (input) {
-    input.value = '';
-    input.placeholder = tabPlaceholders[platform] || '';
-  }
+  if (input) { input.value = ''; input.placeholder = tabPlaceholders[platform] || ''; }
   hideResult();
 }
 
@@ -278,8 +237,7 @@ function hideResult() {
 
 function fmtDur(sec) {
   if (!sec) return '';
-  const s = Math.round(Number(sec));
-  const m = Math.floor(s / 60);
+  const s = Math.round(Number(sec)), m = Math.floor(s / 60);
   return `${m}:${String(s % 60).padStart(2, '0')}`;
 }
 
@@ -310,14 +268,11 @@ async function analyze() {
     const data = await res.json();
 
     loader.classList.remove('show');
-
-    document.getElementById('rThumb').src = data.thumbnail || '';
-    document.getElementById('rTitle').textContent = data.title || 'Vidéo';
-    const dur = data.duration ? ` · ${fmtDur(data.duration)}` : '';
-    document.getElementById('rMeta').textContent = (data.platform || '') + dur;
+    document.getElementById('rThumb').src           = data.thumbnail || '';
+    document.getElementById('rTitle').textContent   = data.title    || 'Vidéo';
+    document.getElementById('rMeta').textContent    = (data.platform || '') + (data.duration ? ` · ${fmtDur(data.duration)}` : '');
 
     const formats = tabFormats[currentTab] || tabFormats.yt;
-
     document.getElementById('dlGrid').innerHTML = formats.map(f => `
       <a class="dl-chip" href="#" onclick="handleDownload(event,'${encodeURIComponent(url)}','${f.fmt}','${f.q}')">
         ${dlIcon()} ${f.label}
@@ -325,8 +280,7 @@ async function analyze() {
     `).join('');
 
     document.getElementById('resultRow').classList.add('show');
-
-  } catch (e) {
+  } catch {
     loader.classList.remove('show');
     alert('Impossible d\'analyser ce lien.\nVérifie qu\'il est public et réessaie.');
   }
@@ -341,70 +295,50 @@ async function handleDownload(e, encodedUrl, fmt, q) {
   await recordDownload();
   updatePremiumBadge();
 
-  // Le backend stream avec Content-Disposition: attachment → téléchargement direct
-  const downloadUrl = `${BACKEND}/download?url=${encodedUrl}&format=${fmt}&quality=${q}`;
-  const a = document.createElement('a');
-  a.href = downloadUrl;
-  a.download = '';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
+  // window.location.href → le navigateur suit directement le stream
+  // Le backend envoie Content-Disposition: attachment → téléchargement forcé
+  window.location.href = `${BACKEND}/download?url=${encodedUrl}&format=${fmt}&quality=${q}`;
 }
 
-// ── LIMIT MODAL ───────────────────────────────────────────────
-function showLimitModal() {
-  document.getElementById('limitModal').style.display = 'flex';
-}
-function closeLimitModal() {
-  document.getElementById('limitModal').style.display = 'none';
-}
+// ── MODALS ────────────────────────────────────────────────────
+function showLimitModal()  { document.getElementById('limitModal').style.display = 'flex'; }
+function closeLimitModal() { document.getElementById('limitModal').style.display = 'none'; }
 
-// ── PREMIUM CODE MODAL ────────────────────────────────────────
 function openCodeModal() {
   closeLimitModal();
   document.getElementById('codeModal').style.display = 'flex';
   document.getElementById('codeInput').value = '';
   document.getElementById('codeMsg').textContent = '';
 }
-function closeCodeModal() {
-  document.getElementById('codeModal').style.display = 'none';
-}
+function closeCodeModal() { document.getElementById('codeModal').style.display = 'none'; }
 
 async function activateCode() {
   const code = document.getElementById('codeInput').value.trim();
   if (!code) return;
   const btn = document.getElementById('activateBtn');
-  btn.disabled = true;
-  btn.textContent = 'Vérification…';
+  btn.disabled = true; btn.textContent = 'Vérification…';
   document.getElementById('codeMsg').textContent = '';
 
   const result = await checkPremiumCode(code);
   if (result.valid) {
-    isPremium = true;
-    premiumExpiry = result.unlimited ? null : result.expiry;
-
     const expText = result.unlimited
       ? 'Accès illimité permanent !'
-      : `Expire le ${new Date(result.expiry).toLocaleDateString('fr', {day:'2-digit', month:'long', year:'numeric'})}`;
-
-    document.getElementById('codeMsg').style.color = '#10b981';
-    document.getElementById('codeMsg').textContent = `✅ Premium activé ! ${expText}`;
+      : `Expire le ${new Date(result.expiry).toLocaleDateString('fr', {day:'2-digit',month:'long',year:'numeric'})}`;
+    document.getElementById('codeMsg').style.color   = '#10b981';
+    document.getElementById('codeMsg').textContent   = `✅ Premium activé ! ${expText}`;
     updatePremiumBadge();
     setTimeout(() => closeCodeModal(), 2000);
   } else {
-    document.getElementById('codeMsg').style.color = '#ef4444';
-    document.getElementById('codeMsg').textContent = result.msg;
+    document.getElementById('codeMsg').style.color   = '#ef4444';
+    document.getElementById('codeMsg').textContent   = result.msg;
   }
-  btn.disabled = false;
-  btn.textContent = 'Activer';
+  btn.disabled = false; btn.textContent = 'Activer';
 }
 
 // ── INIT ──────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
-  // Écouter les changements d'état de connexion Google
-  onAuthStateChanged(auth, async (user) => {
-    isPremium = false;
-    premiumExpiry = null;
+  // Écouter connexion/déconnexion Google → rafraîchir le statut premium
+  onAuthStateChanged(auth, async () => {
     await checkPremiumStatus();
     updatePremiumBadge();
   });
@@ -414,13 +348,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 });
 
-// Expose functions to global scope
-window.switchTab = switchTab;
-window.selectFmt = selectFmt;
-window.analyze = analyze;
+// Expose to global scope
+window.switchTab      = switchTab;
+window.selectFmt      = selectFmt;
+window.analyze        = analyze;
 window.handleDownload = handleDownload;
 window.showLimitModal = showLimitModal;
-window.closeLimitModal = closeLimitModal;
-window.openCodeModal = openCodeModal;
+window.closeLimitModal= closeLimitModal;
+window.openCodeModal  = openCodeModal;
 window.closeCodeModal = closeCodeModal;
-window.activateCode = activateCode;
+window.activateCode   = activateCode;
