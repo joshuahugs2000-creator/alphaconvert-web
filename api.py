@@ -9,7 +9,7 @@ import os, re, logging, unicodedata, httpx, urllib.parse, time, glob, uuid, shut
 from collections import defaultdict
 from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse, RedirectResponse
 from pydantic import BaseModel
 import yt_dlp
 
@@ -258,7 +258,48 @@ def _resolve_tiktok_url(url: str) -> str:
             logger.warning(f"TikTok redirect failed: {e}")
     return url
 
-def _tiktok_rapidapi(url: str, fmt: str):
+def _tiktok_social_media_downloader(url: str, fmt: str):
+    """Utilise social-media-video-downloader (API déjà abonnée dans le dashboard)."""
+    url = _resolve_tiktok_url(url)
+    key = _get_rapidapi_key()
+    if not key:
+        return None, "tiktok"
+    try:
+        r = httpx.get(
+            "https://social-media-video-downloader.p.rapidapi.com/smvd/get/all",
+            params={"url": url},
+            headers={"X-RapidAPI-Key": key, "X-RapidAPI-Host": "social-media-video-downloader.p.rapidapi.com"},
+            timeout=30,
+        )
+        logger.info(f"TikTok social-media-downloader → {r.status_code}")
+        if r.status_code == 200:
+            body  = r.json()
+            title = body.get("title", "tiktok")
+            links = body.get("links", [])
+            if fmt == "mp3":
+                # Chercher audio
+                audio_link = next((l.get("link") for l in links if "audio" in str(l.get("quality","")).lower() or l.get("extension","") in ["mp3","m4a"]), None)
+                if audio_link:
+                    return _save_stream(audio_link, title, ".mp3"), title
+            # Chercher vidéo MP4 sans watermark en priorité
+            video_link = None
+            for quality in ["hd", "sd", "720", "480", "360"]:
+                video_link = next((l.get("link") for l in links if quality in str(l.get("quality","")).lower() and l.get("extension","") == "mp4"), None)
+                if video_link:
+                    break
+            if not video_link:
+                video_link = next((l.get("link") for l in links if l.get("extension","") == "mp4"), None)
+            if not video_link and links:
+                video_link = links[0].get("link")
+            if video_link:
+                return _save_stream(video_link, title, ".mp4"), title
+    except Exception as e:
+        logger.error(f"TikTok social-media-downloader: {e}")
+    return None, "tiktok"
+
+
+def _tiktok_scraper7(url: str, fmt: str):
+    """Fallback: tiktok-scraper7 (nécessite abonnement séparé sur RapidAPI)."""
     url = _resolve_tiktok_url(url)
     key = _get_rapidapi_key()
     if not key:
@@ -274,7 +315,7 @@ def _tiktok_rapidapi(url: str, fmt: str):
         if r.status_code == 200:
             body = r.json()
             if body.get("code", 0) != 0:
-                logger.error(f"TikTok API erreur: {body.get('msg', '')}")
+                logger.error(f"TikTok scraper7 erreur: {body.get('msg', '')}")
                 return None, "tiktok"
             d     = body.get("data") or body
             title = d.get("title", "tiktok")
@@ -287,8 +328,17 @@ def _tiktok_rapidapi(url: str, fmt: str):
             if dl_url:
                 return _save_stream(dl_url, title, ext), title
     except Exception as e:
-        logger.error(f"TikTok RapidAPI: {e}")
+        logger.error(f"TikTok scraper7: {e}")
     return None, "tiktok"
+
+
+def _tiktok_rapidapi(url: str, fmt: str):
+    """Essaie social-media-downloader d'abord, puis scraper7 en fallback."""
+    path, title = _tiktok_social_media_downloader(url, fmt)
+    if path:
+        return path, title
+    logger.info("TikTok social-media-downloader échoué → essai scraper7")
+    return _tiktok_scraper7(url, fmt)
 
 
 # ── YOUTUBE INFO FALLBACK ─────────────────────────────────────────────────────
@@ -338,17 +388,14 @@ def _youtube_mp36_mp3(url: str) -> tuple:
 
 
 # ── YOUTUBE FALLBACK MP4 via ytstream ─────────────────────────────────────────
-def _youtube_ytstream(url: str, quality: str) -> tuple:
-    """
-    ytstream retourne formats comme une LISTE d'objets :
-    [{"itag":"18","url":"...","mimeType":"video/mp4","quality":"medium",...}, ...]
-    """
+def _youtube_ytstream_url(url: str, quality: str):
+    """Retourne l'URL CDN directe (pour redirect navigateur, evite 403 Railway)."""
     key = _get_rapidapi_key()
     if not key:
-        return None, None
+        return None, ""
     vid = _extract_yt_id(url)
     if not vid:
-        return None, None
+        return None, ""
     try:
         r = httpx.get(
             "https://ytstream-download-youtube-videos.p.rapidapi.com/dl",
@@ -357,70 +404,55 @@ def _youtube_ytstream(url: str, quality: str) -> tuple:
                      "X-RapidAPI-Host": "ytstream-download-youtube-videos.p.rapidapi.com"},
             timeout=30,
         )
-        logger.info(f"ytstream → {r.status_code}")
+        logger.info(f"ytstream -> {r.status_code}")
         if r.status_code != 200:
-            return None, None
-
+            return None, ""
         data  = r.json()
         title = data.get("title", "video")
-
-        # formats peut être une LISTE ou un DICT selon la version de l'API
         raw_formats = data.get("formats", [])
         if isinstance(raw_formats, dict):
             formats_list = list(raw_formats.values())
         elif isinstance(raw_formats, list):
             formats_list = raw_formats
         else:
-            logger.warning(f"ytstream: formats type inattendu: {type(raw_formats)}")
-            return None, None
-
+            return None, ""
         logger.info(f"ytstream formats count: {len(formats_list)}")
-
         target_h = int(quality)
-
-        # Priorité : formats muxés MP4 (ont de l'audio) sous la qualité demandée
-        # itag 22 = 720p muxé, itag 18 = 360p muxé — les seuls avec vidéo+audio garanti
         priority_itags = ["22", "18"] if target_h <= 720 else ["137", "22", "18"]
-
-        # D'abord chercher par itag prioritaire
         itag_map = {str(f.get("itag", "")): f for f in formats_list if f.get("url")}
         for itag in priority_itags:
             if itag in itag_map:
                 f = itag_map[itag]
                 logger.info(f"ytstream: using itag={itag} quality={f.get('qualityLabel','?')}")
-                path = _save_stream(f["url"], title, ".mp4")
-                return path, title
-
-        # Fallback : meilleur MP4 avec audio dispo
+                return f["url"], title
         mp4_with_audio = [
             f for f in formats_list
-            if f.get("url")
-            and "video/mp4" in str(f.get("mimeType", ""))
-            and f.get("audioQuality")  # non-null = a de l'audio
+            if f.get("url") and "video/mp4" in str(f.get("mimeType", "")) and f.get("audioQuality")
         ]
         if mp4_with_audio:
-            # Trier par hauteur décroissante, garder sous target_h
-            under = [f for f in mp4_with_audio
-                     if (f.get("height") or 9999) <= target_h]
+            under = [f for f in mp4_with_audio if (f.get("height") or 9999) <= target_h]
             pool  = under if under else mp4_with_audio
             best  = sorted(pool, key=lambda x: x.get("height") or 0, reverse=True)[0]
-            logger.info(f"ytstream: fallback muxed height={best.get('height')}")
-            path = _save_stream(best["url"], title, ".mp4")
-            return path, title
-
-        # Dernier recours : n'importe quel MP4
+            return best["url"], title
         any_mp4 = [f for f in formats_list if f.get("url") and "video/mp4" in str(f.get("mimeType", ""))]
         if any_mp4:
             best = sorted(any_mp4, key=lambda x: x.get("height") or 0, reverse=True)[0]
-            logger.info(f"ytstream: last resort height={best.get('height')}")
-            path = _save_stream(best["url"], title, ".mp4")
-            return path, title
-
+            return best["url"], title
     except Exception as e:
         logger.warning(f"ytstream failed: {e}")
+    return None, ""
+
+
+def _youtube_ytstream(url: str, quality: str) -> tuple:
+    """Essaie de telecharger cote serveur, retourne (path, title) ou (None, None)."""
+    cdn_url, title = _youtube_ytstream_url(url, quality)
+    if cdn_url:
+        try:
+            path = _save_stream(cdn_url, title, ".mp4")
+            return path, title
+        except Exception as e:
+            logger.warning(f"ytstream _save_stream failed: {e}")
     return None, None
-
-
 # ── THUMBNAIL PROXY ───────────────────────────────────────────────────────────
 @app.get("/thumbnail-proxy")
 async def thumbnail_proxy(url: str):
@@ -557,6 +589,11 @@ async def download(url: str, format: str = "mp4", quality: str = "720"):
     # Tentative 2 : ytstream fallback (MP4)
     if format == "mp4":
         logger.info("yt-dlp failed → trying ytstream")
+        # Redirect direct vers CDN Google (evite blocage 403 sur IP Railway)
+        cdn_url, yt_title = _youtube_ytstream_url(url, quality)
+        if cdn_url:
+            logger.info("ytstream: redirect navigateur vers CDN Google")
+            return RedirectResponse(url=cdn_url, status_code=302)
         path, title = _youtube_ytstream(url, quality)
         if path and os.path.exists(path):
             return _serve(path, title)
