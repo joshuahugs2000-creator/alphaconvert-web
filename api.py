@@ -258,48 +258,80 @@ def _resolve_tiktok_url(url: str) -> str:
             logger.warning(f"TikTok redirect failed: {e}")
     return url
 
-def _tiktok_social_media_downloader(url: str, fmt: str):
-    """Utilise social-media-video-downloader (API déjà abonnée dans le dashboard)."""
+def _tiktok_scraptik(url: str, fmt: str):
+    """ScrapTik API - get-post endpoint (scraptik.p.rapidapi.com)."""
+    url = _resolve_tiktok_url(url)
+    key = _get_rapidapi_key()
+    if not key:
+        return None, "tiktok"
+    # Extraire l'ID vidéo de l'URL
+    m = re.search(r"/video/(\d+)", url)
+    if not m:
+        return None, "tiktok"
+    video_id = m.group(1)
+    try:
+        r = httpx.get(
+            "https://scraptik.p.rapidapi.com/get-post",
+            params={"aweme_id": video_id},
+            headers={"X-RapidAPI-Key": key, "X-RapidAPI-Host": "scraptik.p.rapidapi.com"},
+            timeout=30,
+        )
+        logger.info(f"TikTok ScrapTik -> {r.status_code}")
+        if r.status_code == 200:
+            body  = r.json()
+            post  = body.get("aweme_detail") or body.get("aweme_list", [{}])[0] if body else {}
+            title = (post.get("desc") or "tiktok")[:60]
+            video = post.get("video", {})
+            if fmt == "mp3":
+                music = post.get("music", {})
+                dl_url = (music.get("play_url") or {}).get("uri") or (music.get("play_url") or {}).get("url_list", [None])[0]
+                ext = ".mp3"
+            else:
+                # Priorité : sans watermark > HD > normal
+                play_addr = video.get("play_addr_h264") or video.get("download_addr") or video.get("play_addr") or {}
+                url_list  = play_addr.get("url_list", [])
+                dl_url    = url_list[0] if url_list else None
+                ext = ".mp4"
+            if dl_url:
+                return _save_stream(dl_url, title, ext), title
+    except Exception as e:
+        logger.error(f"TikTok ScrapTik: {e}")
+    return None, "tiktok"
+
+
+def _tiktok_scraper2(url: str, fmt: str):
+    """TikTok Scraper2 (JoTucker) - tiktok-scraper2.p.rapidapi.com"""
     url = _resolve_tiktok_url(url)
     key = _get_rapidapi_key()
     if not key:
         return None, "tiktok"
     try:
+        endpoint = "/video/no-watermark" if fmt == "mp4" else "/video/music"
         r = httpx.get(
-            "https://social-media-video-downloader.p.rapidapi.com/smvd/get/all",
-            params={"url": url},
-            headers={"X-RapidAPI-Key": key, "X-RapidAPI-Host": "social-media-video-downloader.p.rapidapi.com"},
+            f"https://tiktok-scraper2.p.rapidapi.com{endpoint}",
+            params={"video_url": url, "fresh": "1"},
+            headers={"X-RapidAPI-Key": key, "X-RapidAPI-Host": "tiktok-scraper2.p.rapidapi.com"},
             timeout=30,
         )
-        logger.info(f"TikTok social-media-downloader → {r.status_code}")
+        logger.info(f"TikTok scraper2 -> {r.status_code}")
         if r.status_code == 200:
             body  = r.json()
             title = body.get("title", "tiktok")
-            links = body.get("links", [])
             if fmt == "mp3":
-                # Chercher audio
-                audio_link = next((l.get("link") for l in links if "audio" in str(l.get("quality","")).lower() or l.get("extension","") in ["mp3","m4a"]), None)
-                if audio_link:
-                    return _save_stream(audio_link, title, ".mp3"), title
-            # Chercher vidéo MP4 sans watermark en priorité
-            video_link = None
-            for quality in ["hd", "sd", "720", "480", "360"]:
-                video_link = next((l.get("link") for l in links if quality in str(l.get("quality","")).lower() and l.get("extension","") == "mp4"), None)
-                if video_link:
-                    break
-            if not video_link:
-                video_link = next((l.get("link") for l in links if l.get("extension","") == "mp4"), None)
-            if not video_link and links:
-                video_link = links[0].get("link")
-            if video_link:
-                return _save_stream(video_link, title, ".mp4"), title
+                dl_url = body.get("music", {}).get("url") or body.get("url")
+                ext = ".mp3"
+            else:
+                dl_url = body.get("video", {}).get("noWatermark") or body.get("url") or body.get("nwm_video_url")
+                ext = ".mp4"
+            if dl_url:
+                return _save_stream(dl_url, title, ext), title
     except Exception as e:
-        logger.error(f"TikTok social-media-downloader: {e}")
+        logger.error(f"TikTok scraper2: {e}")
     return None, "tiktok"
 
 
 def _tiktok_scraper7(url: str, fmt: str):
-    """Fallback: tiktok-scraper7 (nécessite abonnement séparé sur RapidAPI)."""
+    """Fallback: tiktok-scraper7 (tikwm) - tiktok-scraper7.p.rapidapi.com"""
     url = _resolve_tiktok_url(url)
     key = _get_rapidapi_key()
     if not key:
@@ -311,11 +343,10 @@ def _tiktok_scraper7(url: str, fmt: str):
             headers={"X-RapidAPI-Key": key, "X-RapidAPI-Host": "tiktok-scraper7.p.rapidapi.com"},
             timeout=30,
         )
-        logger.info(f"TikTok scraper7 → {r.status_code}")
+        logger.info(f"TikTok scraper7 -> {r.status_code}")
         if r.status_code == 200:
             body = r.json()
             if body.get("code", 0) != 0:
-                logger.error(f"TikTok scraper7 erreur: {body.get('msg', '')}")
                 return None, "tiktok"
             d     = body.get("data") or body
             title = d.get("title", "tiktok")
@@ -333,13 +364,19 @@ def _tiktok_scraper7(url: str, fmt: str):
 
 
 def _tiktok_rapidapi(url: str, fmt: str):
-    """Essaie social-media-downloader d'abord, puis scraper7 en fallback."""
-    path, title = _tiktok_social_media_downloader(url, fmt)
+    """Essaie les APIs TikTok disponibles dans l'ordre."""
+    # 1. ScrapTik (plus populaire, bien maintenu)
+    path, title = _tiktok_scraptik(url, fmt)
     if path:
         return path, title
-    logger.info("TikTok social-media-downloader échoué → essai scraper7")
+    logger.info("ScrapTik echoue -> essai scraper2")
+    # 2. TikTok Scraper2 (JoTucker)
+    path, title = _tiktok_scraper2(url, fmt)
+    if path:
+        return path, title
+    logger.info("Scraper2 echoue -> essai scraper7")
+    # 3. tiktok-scraper7 (tikwm)
     return _tiktok_scraper7(url, fmt)
-
 
 # ── YOUTUBE INFO FALLBACK ─────────────────────────────────────────────────────
 def _youtube_rapidapi_info(url: str) -> dict | None:
@@ -384,6 +421,72 @@ def _youtube_mp36_mp3(url: str) -> tuple:
                 return _save_stream(link, d.get("title", "video"), ".mp3"), d.get("title", "video")
     except Exception as e:
         logger.warning(f"youtube-mp36 failed: {e}")
+    return None, None
+
+
+# ── YOUTUBE MEDIA DOWNLOADER (héberge les fichiers, pas IP-locked) ────────────
+def _youtube_media_downloader(url: str, quality: str, fmt: str) -> tuple:
+    """
+    youtube-media-downloader.p.rapidapi.com
+    Retourne un lien hébergé sur leurs serveurs -> pas de blocage 403 Railway.
+    """
+    key = _get_rapidapi_key()
+    if not key:
+        return None, None
+    vid = _extract_yt_id(url)
+    if not vid:
+        return None, None
+    try:
+        # Récupérer les infos du video
+        r = httpx.get(
+            "https://youtube-media-downloader.p.rapidapi.com/v2/video/details",
+            params={"videoId": vid},
+            headers={"X-RapidAPI-Key": key, "X-RapidAPI-Host": "youtube-media-downloader.p.rapidapi.com"},
+            timeout=30,
+        )
+        logger.info(f"YT-MediaDownloader details -> {r.status_code}")
+        if r.status_code != 200:
+            return None, None
+        data  = r.json()
+        title = data.get("title", "video")
+
+        if fmt == "mp3":
+            # Endpoint audio
+            r2 = httpx.get(
+                "https://youtube-media-downloader.p.rapidapi.com/v2/video/audios",
+                params={"videoId": vid},
+                headers={"X-RapidAPI-Key": key, "X-RapidAPI-Host": "youtube-media-downloader.p.rapidapi.com"},
+                timeout=30,
+            )
+            logger.info(f"YT-MediaDownloader audios -> {r2.status_code}")
+            if r2.status_code == 200:
+                audios = r2.json().get("items", [])
+                if audios:
+                    dl_url = audios[0].get("url")
+                    if dl_url:
+                        return _save_stream(dl_url, title, ".mp3"), title
+        else:
+            # Endpoint vidéo
+            r2 = httpx.get(
+                "https://youtube-media-downloader.p.rapidapi.com/v2/video/videos",
+                params={"videoId": vid},
+                headers={"X-RapidAPI-Key": key, "X-RapidAPI-Host": "youtube-media-downloader.p.rapidapi.com"},
+                timeout=30,
+            )
+            logger.info(f"YT-MediaDownloader videos -> {r2.status_code}")
+            if r2.status_code == 200:
+                videos = r2.json().get("items", [])
+                target_h = int(quality)
+                # Chercher la qualité la plus proche sous le target
+                mp4_vids = [v for v in videos if v.get("extension") == "mp4" and v.get("url")]
+                if mp4_vids:
+                    under = [v for v in mp4_vids if (v.get("height") or 9999) <= target_h]
+                    pool  = under if under else mp4_vids
+                    best  = sorted(pool, key=lambda x: x.get("height") or 0, reverse=True)[0]
+                    logger.info(f"YT-MediaDownloader: height={best.get('height')}")
+                    return _save_stream(best["url"], title, ".mp4"), title
+    except Exception as e:
+        logger.warning(f"YT-MediaDownloader: {e}")
     return None, None
 
 
@@ -586,21 +689,22 @@ async def download(url: str, format: str = "mp4", quality: str = "720"):
         if path:
             return _serve(path, info.get("title", "video"))
 
-    # Tentative 2 : ytstream fallback (MP4)
+    # Tentative 2 : YouTube Media Downloader (heberge les fichiers, pas IP-locked)
+    logger.info("yt-dlp failed → trying youtube-media-downloader")
+    path, title = _youtube_media_downloader(url, quality, format)
+    if path and os.path.exists(path):
+        return _serve(path, title)
+
+    # Tentative 3 : ytstream fallback (MP4)
     if format == "mp4":
-        logger.info("yt-dlp failed → trying ytstream")
-        # Redirect direct vers CDN Google (evite blocage 403 sur IP Railway)
-        cdn_url, yt_title = _youtube_ytstream_url(url, quality)
-        if cdn_url:
-            logger.info("ytstream: redirect navigateur vers CDN Google")
-            return RedirectResponse(url=cdn_url, status_code=302)
+        logger.info("youtube-media-downloader failed → trying ytstream")
         path, title = _youtube_ytstream(url, quality)
         if path and os.path.exists(path):
             return _serve(path, title)
 
-    # Tentative 3 : youtube-mp36 (MP3 seulement)
+    # Tentative 4 : youtube-mp36 (MP3 seulement)
     if format == "mp3":
-        logger.info("yt-dlp failed → trying youtube-mp36 (MP3)")
+        logger.info("youtube-media-downloader failed → trying youtube-mp36 (MP3)")
         path, title = _youtube_mp36_mp3(url)
         if path and os.path.exists(path):
             return _serve(path, title)
