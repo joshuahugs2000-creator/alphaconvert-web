@@ -5,7 +5,7 @@ Fixes:
   - ytstream : formats est une LISTE, pas un dict — parser corrigé
   - TikTok vm. : résolution du redirect avant appel API
   - YouTube Media Downloader : endpoint /streams au lieu de /videos (404 fix)
-  - ytstream : redirect 302 navigateur au lieu de télécharger côté serveur (403 fix)
+  - ytstream : proxy stream côté serveur au lieu de RedirectResponse 302 (403 fix)
 """
 import os, re, logging, unicodedata, httpx, urllib.parse, time, glob, uuid, shutil
 from collections import defaultdict
@@ -424,11 +424,6 @@ def _youtube_mp36_mp3(url: str) -> tuple:
 
 # ── YOUTUBE MEDIA DOWNLOADER ──────────────────────────────────────────────────
 def _youtube_media_downloader(url: str, quality: str, fmt: str) -> tuple:
-    """
-    youtube-media-downloader.p.rapidapi.com
-    FIX : utilise /v2/video/streams au lieu de /v2/video/videos (qui retourne 404).
-    Les URLs retournées sont hébergées sur leurs serveurs → pas d'IP-lock Railway.
-    """
     key = _get_rapidapi_key()
     if not key:
         return None, None
@@ -436,7 +431,6 @@ def _youtube_media_downloader(url: str, quality: str, fmt: str) -> tuple:
     if not vid:
         return None, None
     try:
-        # Récupérer le titre
         r = httpx.get(
             "https://youtube-media-downloader.p.rapidapi.com/v2/video/details",
             params={"videoId": vid},
@@ -449,7 +443,6 @@ def _youtube_media_downloader(url: str, quality: str, fmt: str) -> tuple:
         title = r.json().get("title", "video")
 
         if fmt == "mp3":
-            # Endpoint audio
             r2 = httpx.get(
                 "https://youtube-media-downloader.p.rapidapi.com/v2/video/audios",
                 params={"videoId": vid},
@@ -464,7 +457,6 @@ def _youtube_media_downloader(url: str, quality: str, fmt: str) -> tuple:
                     if dl_url:
                         return _save_stream(dl_url, title, ".mp3"), title
         else:
-            # FIX : endpoint /streams au lieu de /videos (qui retourne 404)
             r2 = httpx.get(
                 "https://youtube-media-downloader.p.rapidapi.com/v2/video/streams",
                 params={"videoId": vid},
@@ -474,7 +466,6 @@ def _youtube_media_downloader(url: str, quality: str, fmt: str) -> tuple:
             logger.info(f"YT-MediaDownloader streams -> {r2.status_code}")
             if r2.status_code == 200:
                 data     = r2.json()
-                # /streams retourne {"videos": [...], "audios": [...]} ou {"items": [...]}
                 videos   = data.get("videos") or data.get("items") or []
                 target_h = int(quality)
                 mp4_vids = [v for v in videos
@@ -489,7 +480,6 @@ def _youtube_media_downloader(url: str, quality: str, fmt: str) -> tuple:
                     best  = sorted(pool, key=lambda x: x.get("height") or 0, reverse=True)[0]
                     logger.info(f"YT-MediaDownloader streams: height={best.get('height')}")
                     return _save_stream(best["url"], title, ".mp4"), title
-                # Fallback : premier stream avec URL, peu importe le format
                 any_vid = [v for v in videos if v.get("url")]
                 if any_vid:
                     best = sorted(any_vid, key=lambda x: x.get("height") or 0, reverse=True)[0]
@@ -500,13 +490,12 @@ def _youtube_media_downloader(url: str, quality: str, fmt: str) -> tuple:
     return None, None
 
 
-# ── YOUTUBE FALLBACK MP4 via ytstream (redirect navigateur) ───────────────────
+# ── YOUTUBE FALLBACK MP4 via ytstream (proxy stream côté serveur) ─────────────
 def _youtube_ytstream_get_url(url: str, quality: str) -> tuple:
     """
     Retourne (cdn_url, title) depuis ytstream.
-    IMPORTANT : L'URL CDN Google est IP-locked à l'IP Railway qui a fait la requête.
-    → Ne JAMAIS télécharger cette URL côté serveur Railway (403 garanti).
-    → Utiliser uniquement pour un RedirectResponse 302 vers le navigateur client.
+    L'URL CDN Google est signée et liée à l'IP du serveur Railway qui a fait la requête.
+    On streame donc le fichier côté serveur vers le client (proxy), jamais de RedirectResponse.
     """
     key = _get_rapidapi_key()
     if not key:
@@ -559,6 +548,45 @@ def _youtube_ytstream_get_url(url: str, quality: str) -> tuple:
     except Exception as e:
         logger.warning(f"ytstream failed: {e}")
     return None, ""
+
+
+def _youtube_ytstream_proxy(cdn_url: str, title: str) -> StreamingResponse:
+    """
+    Proxy stream : télécharge le CDN Google côté serveur et le pipe vers le navigateur.
+    Résout le 403 causé par l'IP-lock des URLs signées Google Video.
+    """
+    safe_title = safe_filename(title)
+    hdrs = {
+        "User-Agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Accept":          "*/*",
+        "Accept-Encoding": "identity",
+        "Referer":         "https://www.youtube.com/",
+        "Origin":          "https://www.youtube.com",
+    }
+
+    def iter_content():
+        with httpx.stream("GET", cdn_url, timeout=300, follow_redirects=True, headers=hdrs) as r:
+            if r.status_code not in (200, 206):
+                logger.error(f"ytstream proxy CDN refuse: HTTP {r.status_code}")
+                return
+            logger.info(f"ytstream proxy: streaming vers client ({r.headers.get('content-length','?')} bytes)")
+            for chunk in r.iter_bytes(65536):
+                yield chunk
+
+    # Récupérer Content-Length pour que le navigateur affiche la progression
+    response_headers = {"Content-Disposition": f'attachment; filename="{safe_title}.mp4"'}
+    try:
+        head = httpx.head(cdn_url, timeout=10, follow_redirects=True, headers=hdrs)
+        if "content-length" in head.headers:
+            response_headers["Content-Length"] = head.headers["content-length"]
+    except Exception:
+        pass
+
+    return StreamingResponse(
+        iter_content(),
+        media_type="video/mp4",
+        headers=response_headers,
+    )
 
 
 # ── THUMBNAIL PROXY ───────────────────────────────────────────────────────────
@@ -697,13 +725,13 @@ async def download(url: str, format: str = "mp4", quality: str = "720"):
     if path and os.path.exists(path):
         return _serve(path, title)
 
-    # Tentative 3 : ytstream → redirect 302 navigateur (évite le 403 IP-lock Railway)
+    # Tentative 3 : ytstream → proxy stream côté serveur (évite le 403 IP-lock)
     if format == "mp4":
-        logger.info("youtube-media-downloader failed → trying ytstream redirect")
-        cdn_url, _title = _youtube_ytstream_get_url(url, quality)
+        logger.info("youtube-media-downloader failed → trying ytstream proxy")
+        cdn_url, yt_title = _youtube_ytstream_get_url(url, quality)
         if cdn_url:
-            logger.info("ytstream: redirect 302 navigateur vers CDN Google")
-            return RedirectResponse(url=cdn_url, status_code=302)
+            logger.info("ytstream: proxy stream côté serveur vers client")
+            return _youtube_ytstream_proxy(cdn_url, yt_title)
 
     # Tentative 4 : youtube-mp36 (MP3 seulement)
     if format == "mp3":
