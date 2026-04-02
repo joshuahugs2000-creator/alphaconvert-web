@@ -4,6 +4,8 @@ Fixes:
   - yt-dlp : format simplifié sans ffmpeg (best[ext=mp4] au lieu de bestvideo+bestaudio)
   - ytstream : formats est une LISTE, pas un dict — parser corrigé
   - TikTok vm. : résolution du redirect avant appel API
+  - YouTube Media Downloader : endpoint /streams au lieu de /videos (404 fix)
+  - ytstream : redirect 302 navigateur au lieu de télécharger côté serveur (403 fix)
 """
 import os, re, logging, unicodedata, httpx, urllib.parse, time, glob, uuid, shutil
 from collections import defaultdict
@@ -264,7 +266,6 @@ def _tiktok_scraptik(url: str, fmt: str):
     key = _get_rapidapi_key()
     if not key:
         return None, "tiktok"
-    # Extraire l'ID vidéo de l'URL
     m = re.search(r"/video/(\d+)", url)
     if not m:
         return None, "tiktok"
@@ -283,15 +284,14 @@ def _tiktok_scraptik(url: str, fmt: str):
             title = (post.get("desc") or "tiktok")[:60]
             video = post.get("video", {})
             if fmt == "mp3":
-                music = post.get("music", {})
+                music  = post.get("music", {})
                 dl_url = (music.get("play_url") or {}).get("uri") or (music.get("play_url") or {}).get("url_list", [None])[0]
-                ext = ".mp3"
+                ext    = ".mp3"
             else:
-                # Priorité : sans watermark > HD > normal
                 play_addr = video.get("play_addr_h264") or video.get("download_addr") or video.get("play_addr") or {}
                 url_list  = play_addr.get("url_list", [])
                 dl_url    = url_list[0] if url_list else None
-                ext = ".mp4"
+                ext       = ".mp4"
             if dl_url:
                 return _save_stream(dl_url, title, ext), title
     except Exception as e:
@@ -319,10 +319,10 @@ def _tiktok_scraper2(url: str, fmt: str):
             title = body.get("title", "tiktok")
             if fmt == "mp3":
                 dl_url = body.get("music", {}).get("url") or body.get("url")
-                ext = ".mp3"
+                ext    = ".mp3"
             else:
                 dl_url = body.get("video", {}).get("noWatermark") or body.get("url") or body.get("nwm_video_url")
-                ext = ".mp4"
+                ext    = ".mp4"
             if dl_url:
                 return _save_stream(dl_url, title, ext), title
     except Exception as e:
@@ -365,18 +365,16 @@ def _tiktok_scraper7(url: str, fmt: str):
 
 def _tiktok_rapidapi(url: str, fmt: str):
     """Essaie les APIs TikTok disponibles dans l'ordre."""
-    # 1. ScrapTik (plus populaire, bien maintenu)
     path, title = _tiktok_scraptik(url, fmt)
     if path:
         return path, title
     logger.info("ScrapTik echoue -> essai scraper2")
-    # 2. TikTok Scraper2 (JoTucker)
     path, title = _tiktok_scraper2(url, fmt)
     if path:
         return path, title
     logger.info("Scraper2 echoue -> essai scraper7")
-    # 3. tiktok-scraper7 (tikwm)
     return _tiktok_scraper7(url, fmt)
+
 
 # ── YOUTUBE INFO FALLBACK ─────────────────────────────────────────────────────
 def _youtube_rapidapi_info(url: str) -> dict | None:
@@ -401,7 +399,7 @@ def _youtube_rapidapi_info(url: str) -> dict | None:
     return None
 
 
-# ── YOUTUBE FALLBACK MP3 ──────────────────────────────────────────────────────
+# ── YOUTUBE FALLBACK MP3 via youtube-mp36 ─────────────────────────────────────
 def _youtube_mp36_mp3(url: str) -> tuple:
     key = _get_rapidapi_key()
     if not key:
@@ -415,7 +413,7 @@ def _youtube_mp36_mp3(url: str) -> tuple:
                       timeout=40)
         logger.info(f"youtube-mp36 → {r.status_code}")
         if r.status_code == 200:
-            d = r.json()
+            d    = r.json()
             link = d.get("link")
             if link:
                 return _save_stream(link, d.get("title", "video"), ".mp3"), d.get("title", "video")
@@ -424,11 +422,12 @@ def _youtube_mp36_mp3(url: str) -> tuple:
     return None, None
 
 
-# ── YOUTUBE MEDIA DOWNLOADER (héberge les fichiers, pas IP-locked) ────────────
+# ── YOUTUBE MEDIA DOWNLOADER ──────────────────────────────────────────────────
 def _youtube_media_downloader(url: str, quality: str, fmt: str) -> tuple:
     """
     youtube-media-downloader.p.rapidapi.com
-    Retourne un lien hébergé sur leurs serveurs -> pas de blocage 403 Railway.
+    FIX : utilise /v2/video/streams au lieu de /v2/video/videos (qui retourne 404).
+    Les URLs retournées sont hébergées sur leurs serveurs → pas d'IP-lock Railway.
     """
     key = _get_rapidapi_key()
     if not key:
@@ -437,7 +436,7 @@ def _youtube_media_downloader(url: str, quality: str, fmt: str) -> tuple:
     if not vid:
         return None, None
     try:
-        # Récupérer les infos du video
+        # Récupérer le titre
         r = httpx.get(
             "https://youtube-media-downloader.p.rapidapi.com/v2/video/details",
             params={"videoId": vid},
@@ -447,8 +446,7 @@ def _youtube_media_downloader(url: str, quality: str, fmt: str) -> tuple:
         logger.info(f"YT-MediaDownloader details -> {r.status_code}")
         if r.status_code != 200:
             return None, None
-        data  = r.json()
-        title = data.get("title", "video")
+        title = r.json().get("title", "video")
 
         if fmt == "mp3":
             # Endpoint audio
@@ -466,33 +464,50 @@ def _youtube_media_downloader(url: str, quality: str, fmt: str) -> tuple:
                     if dl_url:
                         return _save_stream(dl_url, title, ".mp3"), title
         else:
-            # Endpoint vidéo
+            # FIX : endpoint /streams au lieu de /videos (qui retourne 404)
             r2 = httpx.get(
-                "https://youtube-media-downloader.p.rapidapi.com/v2/video/videos",
+                "https://youtube-media-downloader.p.rapidapi.com/v2/video/streams",
                 params={"videoId": vid},
                 headers={"X-RapidAPI-Key": key, "X-RapidAPI-Host": "youtube-media-downloader.p.rapidapi.com"},
                 timeout=30,
             )
-            logger.info(f"YT-MediaDownloader videos -> {r2.status_code}")
+            logger.info(f"YT-MediaDownloader streams -> {r2.status_code}")
             if r2.status_code == 200:
-                videos = r2.json().get("items", [])
+                data     = r2.json()
+                # /streams retourne {"videos": [...], "audios": [...]} ou {"items": [...]}
+                videos   = data.get("videos") or data.get("items") or []
                 target_h = int(quality)
-                # Chercher la qualité la plus proche sous le target
-                mp4_vids = [v for v in videos if v.get("extension") == "mp4" and v.get("url")]
+                mp4_vids = [v for v in videos
+                            if v.get("url") and (
+                                v.get("extension") == "mp4"
+                                or "mp4" in str(v.get("mimeType", "")).lower()
+                                or "mp4" in str(v.get("container", "")).lower()
+                            )]
                 if mp4_vids:
                     under = [v for v in mp4_vids if (v.get("height") or 9999) <= target_h]
                     pool  = under if under else mp4_vids
                     best  = sorted(pool, key=lambda x: x.get("height") or 0, reverse=True)[0]
-                    logger.info(f"YT-MediaDownloader: height={best.get('height')}")
+                    logger.info(f"YT-MediaDownloader streams: height={best.get('height')}")
+                    return _save_stream(best["url"], title, ".mp4"), title
+                # Fallback : premier stream avec URL, peu importe le format
+                any_vid = [v for v in videos if v.get("url")]
+                if any_vid:
+                    best = sorted(any_vid, key=lambda x: x.get("height") or 0, reverse=True)[0]
+                    logger.info(f"YT-MediaDownloader streams (any): height={best.get('height')}")
                     return _save_stream(best["url"], title, ".mp4"), title
     except Exception as e:
         logger.warning(f"YT-MediaDownloader: {e}")
     return None, None
 
 
-# ── YOUTUBE FALLBACK MP4 via ytstream ─────────────────────────────────────────
-def _youtube_ytstream_url(url: str, quality: str):
-    """Retourne l'URL CDN directe (pour redirect navigateur, evite 403 Railway)."""
+# ── YOUTUBE FALLBACK MP4 via ytstream (redirect navigateur) ───────────────────
+def _youtube_ytstream_get_url(url: str, quality: str) -> tuple:
+    """
+    Retourne (cdn_url, title) depuis ytstream.
+    IMPORTANT : L'URL CDN Google est IP-locked à l'IP Railway qui a fait la requête.
+    → Ne JAMAIS télécharger cette URL côté serveur Railway (403 garanti).
+    → Utiliser uniquement pour un RedirectResponse 302 vers le navigateur client.
+    """
     key = _get_rapidapi_key()
     if not key:
         return None, ""
@@ -520,13 +535,13 @@ def _youtube_ytstream_url(url: str, quality: str):
         else:
             return None, ""
         logger.info(f"ytstream formats count: {len(formats_list)}")
-        target_h = int(quality)
+        target_h       = int(quality)
         priority_itags = ["22", "18"] if target_h <= 720 else ["137", "22", "18"]
-        itag_map = {str(f.get("itag", "")): f for f in formats_list if f.get("url")}
+        itag_map       = {str(f.get("itag", "")): f for f in formats_list if f.get("url")}
         for itag in priority_itags:
             if itag in itag_map:
                 f = itag_map[itag]
-                logger.info(f"ytstream: using itag={itag} quality={f.get('qualityLabel','?')}")
+                logger.info(f"ytstream: itag={itag} quality={f.get('qualityLabel','?')}")
                 return f["url"], title
         mp4_with_audio = [
             f for f in formats_list
@@ -546,16 +561,6 @@ def _youtube_ytstream_url(url: str, quality: str):
     return None, ""
 
 
-def _youtube_ytstream(url: str, quality: str) -> tuple:
-    """Essaie de telecharger cote serveur, retourne (path, title) ou (None, None)."""
-    cdn_url, title = _youtube_ytstream_url(url, quality)
-    if cdn_url:
-        try:
-            path = _save_stream(cdn_url, title, ".mp4")
-            return path, title
-        except Exception as e:
-            logger.warning(f"ytstream _save_stream failed: {e}")
-    return None, None
 # ── THUMBNAIL PROXY ───────────────────────────────────────────────────────────
 @app.get("/thumbnail-proxy")
 async def thumbnail_proxy(url: str):
@@ -639,7 +644,7 @@ async def download(url: str, format: str = "mp4", quality: str = "720"):
             return _serve(path, title)
         raise HTTPException(status_code=500, detail="Telechargement impossible")
 
-    # ── YouTube ────────────────────────────────────────────────────────────────
+    # ── YouTube ───────────────────────────────────────────────────────────────
     uid  = uuid.uuid4().hex[:8]
     base = _ydl_base(uid)
 
@@ -649,7 +654,6 @@ async def download(url: str, format: str = "mp4", quality: str = "720"):
                     "postprocessors": [{"key": "FFmpegExtractAudio",
                                         "preferredcodec": "mp3", "preferredquality": "192"}]}
         else:
-            # Sans ffmpeg : m4a direct
             opts = {**base, "format": "bestaudio[ext=m4a]/bestaudio/best"}
     else:
         if FFMPEG_OK:
@@ -661,8 +665,6 @@ async def download(url: str, format: str = "mp4", quality: str = "720"):
             }
             opts = {**base, "format": fmt_map[quality], "merge_output_format": "mp4"}
         else:
-            # FIX : sans ffmpeg on ne peut pas merger → format progressif muxé uniquement
-            # best[ext=mp4] = meilleur format MP4 avec vidéo+audio dans un seul fichier
             fmt_map = {
                 "1080": "best[ext=mp4][height<=720]/best[ext=mp4]/best",
                 "720":  "best[ext=mp4][height<=720]/best[ext=mp4]/best",
@@ -689,22 +691,23 @@ async def download(url: str, format: str = "mp4", quality: str = "720"):
         if path:
             return _serve(path, info.get("title", "video"))
 
-    # Tentative 2 : YouTube Media Downloader (heberge les fichiers, pas IP-locked)
+    # Tentative 2 : YouTube Media Downloader (endpoint /streams, hébergé, pas IP-locked)
     logger.info("yt-dlp failed → trying youtube-media-downloader")
     path, title = _youtube_media_downloader(url, quality, format)
     if path and os.path.exists(path):
         return _serve(path, title)
 
-    # Tentative 3 : ytstream fallback (MP4)
+    # Tentative 3 : ytstream → redirect 302 navigateur (évite le 403 IP-lock Railway)
     if format == "mp4":
-        logger.info("youtube-media-downloader failed → trying ytstream")
-        path, title = _youtube_ytstream(url, quality)
-        if path and os.path.exists(path):
-            return _serve(path, title)
+        logger.info("youtube-media-downloader failed → trying ytstream redirect")
+        cdn_url, _title = _youtube_ytstream_get_url(url, quality)
+        if cdn_url:
+            logger.info("ytstream: redirect 302 navigateur vers CDN Google")
+            return RedirectResponse(url=cdn_url, status_code=302)
 
     # Tentative 4 : youtube-mp36 (MP3 seulement)
     if format == "mp3":
-        logger.info("youtube-media-downloader failed → trying youtube-mp36 (MP3)")
+        logger.info("yt-dlp/media-downloader failed → trying youtube-mp36 (MP3)")
         path, title = _youtube_mp36_mp3(url)
         if path and os.path.exists(path):
             return _serve(path, title)
